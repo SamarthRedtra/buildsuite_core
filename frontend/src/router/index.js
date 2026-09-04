@@ -296,6 +296,12 @@ const routes = [
 				component: () => import("@/views/workspaces/ProjectDashboardView.vue"),
 			},
 			{
+				// Insights — ask-a-question reporting. Leadership-gated in the view.
+				path: "insights",
+				name: "insights",
+				component: () => import("@/views/InsightsView.vue"),
+			},
+			{
 				path: "reports/view/:report",
 				name: "report-view",
 				component: () => import("@/views/ReportView.vue"),
@@ -307,6 +313,13 @@ const routes = [
 				path: "reports/delay-analysis",
 				name: "report-delay-analysis",
 				component: () => import("@/views/DelayAnalysisReportView.vue"),
+			},
+			{
+				// Bespoke project cost-control report — Planned/Committed/Actual/Variance per BOQ
+				// cost code. Launched from the project overview with ?project=<id>.
+				path: "reports/cost-vs-budget",
+				name: "report-cost-vs-budget",
+				component: () => import("@/views/CostVsBudgetReportView.vue"),
 			},
 			{
 				path: "reports/:slug",
@@ -351,6 +364,24 @@ const routes = [
 				component: () => import("@/views/procurement/NewMaterialRequestView.vue"),
 			},
 			{
+				path: "records/:doctype/new",
+				name: "record-new",
+				component: () => import("@/views/records/DocTypeRecordFormView.vue"),
+				props: true,
+			},
+			{
+				path: "records/:doctype/:name",
+				name: "record-edit",
+				component: () => import("@/views/records/DocTypeRecordFormView.vue"),
+				props: true,
+			},
+			{
+				path: "records/:doctype",
+				name: "records-list",
+				component: () => import("@/views/records/DocTypeRecordsListView.vue"),
+				props: true,
+			},
+			{
 				path: "procurement/purchase-orders",
 				name: "purchase-orders",
 				component: () => import("@/views/procurement/PurchaseOrdersListView.vue"),
@@ -370,6 +401,12 @@ const routes = [
 				path: "procurement/purchase-orders/:id/edit",
 				name: "purchase-order-edit",
 				component: () => import("@/views/procurement/NewPurchaseOrderView.vue"),
+			},
+			{
+				path: "procurement/purchase-orders/:id/print",
+				name: "purchase-order-print",
+				component: () => import("@/views/procurement/PurchaseOrderPrintView.vue"),
+				props: true,
 			},
 			{
 				path: "procurement/receipts",

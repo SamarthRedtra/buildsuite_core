@@ -160,7 +160,7 @@ has_permission = {
 # Override the Project controller so its record name honours the BuildSuite Core
 # Settings "Project Naming" option (Project ID vs an ERPNext naming series), and the
 # Task controller so it never auto-fills the end date from expected_time.
-override_doctype_class = {
+override_doctype_class = {  # nosemgrep: override-doctype-class -- intentional, documented Project/Task controller overrides
 	"Project": "buildsuite_core.overrides.project.BuildSuiteProject",
 	"Task": "buildsuite_core.overrides.task.BuildSuiteTask",
 }
@@ -177,6 +177,17 @@ doc_events = {
     "Purchase Receipt": {
         "on_update":"buildsuite_core.utils.purchase_receipt.create_remarks"
     },
+	# Reference No is optional in BuildSuite (SPA + mobile); default it for a bank Payment
+	# Entry so no path (advance / receipt / bill payment) hits ERPNext's mandatory check.
+	"Payment Entry": {
+		"before_validate": "buildsuite_core.utils.payment.default_bank_reference"
+	},
+	# ERPNext auto-creates a self-service User Permission (own Employee only) when a user is linked
+	# to their Employee. For a roster-managing persona that wrongly hides every OTHER employee
+	# (empty field-employee list, 403 on any other worker) — drop it so access matches the matrix.
+	"User Permission": {
+		"after_insert": "buildsuite_core.utils.employee_permissions.drop_self_service_for_managers"
+	},
 	"Project": {
 		"before_insert": "buildsuite_core.utils.project.set_company_on_insert",
 		"validate": [

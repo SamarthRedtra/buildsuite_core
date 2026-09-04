@@ -562,7 +562,12 @@ const _ALL_PERSONAS = Object.keys(PERSONA_CAPS);
 const _MODULE_ACCESS = {
 	// Procurement
 	materialRequest: {
+		// Site Engineer + Foreman RAISE only (create+read, no write/delete/submit); PM authors +
+		// submits (_CRWS, no delete); Procurement is full (backend MATERIAL_REQUEST_ROLE_PERMS).
 		create: ["pm", "site-engineer", "foreman", "procurement", "admin", "bsa"],
+		edit: ["pm", "procurement", "admin", "bsa"],
+		del: ["procurement", "admin", "bsa"],
+		submit: ["pm", "procurement", "admin", "bsa"],
 		read: [
 			"director",
 			"pm",
@@ -584,7 +589,11 @@ const _MODULE_ACCESS = {
 		read: ["director", "pm", "procurement", "store-keeper", "accountant", "admin", "bsa"],
 	},
 	materialConsumption: {
+		// Stock Entry (Material Issue). Site Engineer posts + submits (_CRWS, no delete);
+		// Procurement + Store Keeper are full (backend STOCK_ENTRY_ROLE_PERMS).
 		create: ["site-engineer", "procurement", "store-keeper", "admin", "bsa"],
+		del: ["procurement", "store-keeper", "admin", "bsa"],
+		submit: ["site-engineer", "procurement", "store-keeper", "admin", "bsa"],
 		read: [
 			"director",
 			"pm",
@@ -629,17 +638,16 @@ const _MODULE_ACCESS = {
 	},
 	// Subcontract
 	subcontractor: {
-		create: ["procurement", "pm", "director", "admin", "bsa"],
-		read: [
-			"procurement",
-			"pm",
-			"director",
-			"qs",
-			"site-engineer",
-			"accountant",
-			"admin",
-			"bsa",
-		],
+		// Site Engineer has no Subcontractors screen (per the Site Engineer ruling). Its bare
+		// read on Supplier survives at the backend via the read-mirror (the Work Order it can
+		// read links to Supplier), but that only resolves the WO's supplier name — no screen.
+		// Accountant + QS maintain subcontractors fully; Estimator is read-only.
+		create: ["procurement", "pm", "director", "qs", "accountant", "admin", "bsa"],
+		// PM maintains subcontractors (create/edit) but does NOT delete them (backend _CRW).
+		// Delete must be listed explicitly, else it defaults to `create` and the button renders
+		// for PM though the server (correctly) rejects it. Mirrors SUBCONTRACT_ROLE_PERMS.
+		del: ["procurement", "director", "qs", "accountant", "admin", "bsa"],
+		read: ["procurement", "pm", "director", "qs", "accountant", "estimator", "admin", "bsa"],
 	},
 	subcontractorWorkOrder: {
 		create: ["procurement", "pm", "director", "qs", "admin", "bsa"],
@@ -656,20 +664,22 @@ const _MODULE_ACCESS = {
 		],
 	},
 	measurementBook: {
-		create: ["procurement", "pm", "director", "qs", "site-engineer", "admin", "bsa"],
-		read: [
-			"procurement",
-			"pm",
-			"director",
-			"qs",
-			"site-engineer",
-			"accountant",
-			"admin",
-			"bsa",
-		],
+		// Procurement Officer has no MB access (per the Procurement ruling); Director is read-only.
+		// Site Engineer RAISES books (create) but does NOT edit/delete/certify them (edit/del below
+		// exclude it), so the detail view's Edit/Certify/Delete buttons hide for the Site Engineer.
+		create: ["pm", "qs", "site-engineer", "admin", "bsa"],
+		edit: ["pm", "qs", "admin", "bsa"],
+		del: ["pm", "qs", "admin", "bsa"],
+		read: ["pm", "director", "qs", "site-engineer", "estimator", "accountant", "admin", "bsa"],
 	},
 	subcontractorBill: {
-		create: ["procurement", "pm", "director", "qs", "admin", "bsa"],
+		// Director is read-only; Estimator has no bill access (omitted). Accountant is full.
+		// PM + Procurement RAISE and prepare bills (create + write) but the QS + Accountant
+		// DELETE and SUBMIT them (backend _CRW vs _FULL_SUB) — so del + submit are narrower
+		// than create, and edit defaults to create (everyone who raises may also write).
+		create: ["procurement", "pm", "qs", "accountant", "admin", "bsa"],
+		del: ["qs", "accountant", "admin", "bsa"],
+		submit: ["qs", "accountant", "admin", "bsa"],
 		read: [
 			"procurement",
 			"pm",
@@ -683,11 +693,17 @@ const _MODULE_ACCESS = {
 	},
 	// Workforce
 	fieldEmployee: {
+		// HR/PM/admin maintain the worker master fully; Site Engineer edits but does NOT
+		// delete (backend EMPLOYEE_WRITE_ROLE_PERMS SE _CRW), so del is explicit.
 		create: ["pm", "site-engineer", "hr-manager", "admin", "bsa"],
+		del: ["pm", "hr-manager", "admin", "bsa"],
 		read: _ALL_PERSONAS, // Employee is a linked-master read mirror — every persona reads it
 	},
 	crew: {
+		// PM/SE/HR maintain crews fully; Foreman maintains membership (edit) but does NOT
+		// delete a crew (backend CREW_ROLE_PERMS Foreman _CRW), so del is explicit.
 		create: ["pm", "site-engineer", "foreman", "hr-manager", "admin", "bsa"],
+		del: ["pm", "site-engineer", "hr-manager", "admin", "bsa"],
 		read: ["director", "pm", "site-engineer", "foreman", "hr-manager", "admin", "bsa"],
 	},
 	fieldAttendance: {
@@ -705,7 +721,10 @@ const _MODULE_ACCESS = {
 	},
 	// Equipment
 	machinery: {
+		// Procurement + Store Keeper maintain the register fully; PM edits but does NOT delete
+		// (backend MACHINERY_ROLE_PERMS PM _CRW), so del is explicit.
 		create: ["pm", "procurement", "store-keeper", "admin", "bsa"],
+		del: ["procurement", "store-keeper", "admin", "bsa"],
 		read: [
 			"director",
 			"pm",
@@ -719,7 +738,10 @@ const _MODULE_ACCESS = {
 		],
 	},
 	machineryUsage: {
+		// Site records usage (PM/SE/SK full); Foreman edits but does NOT delete (backend
+		// MACHINERY_USAGE_ROLE_PERMS Foreman _CRW), so del is explicit.
 		create: ["pm", "site-engineer", "foreman", "store-keeper", "admin", "bsa"],
+		del: ["pm", "site-engineer", "store-keeper", "admin", "bsa"],
 		read: [
 			"director",
 			"pm",
@@ -732,12 +754,122 @@ const _MODULE_ACCESS = {
 			"bsa",
 		],
 	},
+	// Project Finance — the create/read sets mirror the backend perm maps in
+	// buildsuite_core/permissions/setup.py, so the finance panels' "+ New" buttons
+	// show only for personas whose DocPerm would actually allow the insert.
+	supplier: {
+		// Supplier (SUBCONTRACT_ROLE_PERMS) — same doctype the Suppliers panel creates.
+		// PM maintains suppliers (create/edit) but does NOT delete them (backend _CRW), so
+		// del is explicit (else it defaults to create and PM gets a Delete button the server rejects).
+		create: ["procurement", "pm", "director", "qs", "accountant", "admin", "bsa"],
+		del: ["procurement", "director", "qs", "accountant", "admin", "bsa"],
+		read: [
+			"procurement",
+			"pm",
+			"director",
+			"qs",
+			"site-engineer",
+			"accountant",
+			"store-keeper",
+			"estimator",
+			"admin",
+			"bsa",
+		],
+	},
+	customer: {
+		// Customer (CUSTOMER_WRITE_ROLE_PERMS); read is the linked-master mirror = every persona
+		// EXCEPT HR Manager, which has no Customer screen (per the HR ruling). PM edits but does
+		// NOT delete (backend _CRW), so del is explicit.
+		create: ["director", "pm", "accountant", "admin", "bsa"],
+		del: ["director", "accountant", "admin", "bsa"],
+		read: _ALL_PERSONAS.filter((p) => p !== "hr-manager"),
+	},
+	supplierBill: {
+		// Purchase Invoice (PURCHASE_INVOICE_ROLE_PERMS). Director + Accountant own invoicing
+		// (_FULL_SUB); PM raises + edits (_CRW) but the Accountant deletes/submits.
+		create: ["director", "pm", "accountant", "admin", "bsa"],
+		del: ["director", "accountant", "admin", "bsa"],
+		submit: ["director", "accountant", "admin", "bsa"],
+		read: ["director", "pm", "procurement", "store-keeper", "accountant", "admin", "bsa"],
+	},
+	salesInvoice: {
+		// Sales Invoice (SALES_INVOICE_ROLE_PERMS)
+		create: ["director", "accountant", "admin", "bsa"],
+		read: ["director", "pm", "qs", "accountant", "estimator", "admin", "bsa"],
+	},
+	advance: {
+		// Payment Entry (PAYMENT_ENTRY_ROLE_PERMS) — supplier/customer advances + payments
+		create: ["accountant", "admin", "bsa"],
+		read: ["director", "pm", "procurement", "accountant", "estimator", "admin", "bsa"],
+	},
+	pettyCash: {
+		// Petty Cash Request (PETTY_CASH_ROLE_PERMS). Director/PM/Accountant own it fully (_FULL);
+		// Site Engineer + Foreman raise + edit their own (create+write, no delete); Store Keeper /
+		// Procurement / Estimator / HR RAISE only (create+read, no write/delete). So edit excludes
+		// the raise-only roles and del is finance-only — both must be explicit, else they default
+		// to the full create set and render Edit/Delete buttons the server rejects.
+		create: ["director", "pm", "accountant", "site-engineer", "foreman", "store-keeper", "procurement", "estimator", "hr-manager", "admin", "bsa"],
+		edit: ["director", "pm", "accountant", "site-engineer", "foreman", "admin", "bsa"],
+		del: ["director", "pm", "accountant", "admin", "bsa"],
+		read: [
+			"director",
+			"pm",
+			"accountant",
+			"site-engineer",
+			"foreman",
+			"store-keeper",
+			"procurement",
+			"estimator",
+			"hr-manager",
+			"qs",
+			"admin",
+			"bsa",
+		],
+	},
+	expense: {
+		// Expense Entry (EXPENSE_ENTRY_ROLE_PERMS). Director/PM/Accountant own it (_FULL_SUB);
+		// Site Engineer + Foreman create+edit drafts (no delete/submit); Store Keeper/Procurement/
+		// QS/Estimator/HR RAISE only (create+read, no write/delete/submit). Finance submits.
+		create: ["director", "pm", "accountant", "site-engineer", "foreman", "store-keeper", "procurement", "qs", "estimator", "hr-manager", "admin", "bsa"],
+		edit: ["director", "pm", "accountant", "site-engineer", "foreman", "admin", "bsa"],
+		del: ["director", "pm", "accountant", "admin", "bsa"],
+		submit: ["director", "pm", "accountant", "admin", "bsa"],
+		read: [
+			"director",
+			"pm",
+			"accountant",
+			"site-engineer",
+			"foreman",
+			"store-keeper",
+			"procurement",
+			"qs",
+			"estimator",
+			"hr-manager",
+			"admin",
+			"bsa",
+		],
+	},
 };
 
-for (const [entity, { create, read }] of Object.entries(_MODULE_ACCESS)) {
+// edit/del default to the create set (the common case: whoever can create can edit +
+// delete). Provide them explicitly only when they diverge — e.g. a role that may CREATE
+// a record but not EDIT or DELETE it (Site Engineer raises a Measurement Book but the QS
+// edits/certifies it). read defaults to (create ∪ read).
+for (const [entity, access] of Object.entries(_MODULE_ACCESS)) {
+	// submit defaults to del (both are the "full control" set on a submittable doctype);
+	// provide it explicitly when a role may CREATE/EDIT but not SUBMIT (e.g. PM prepares a
+	// bill, the QS submits it). Non-submittable entities never render a submit button, so
+	// the default is harmless there.
+	const { create, read, edit = create, del = create, submit = del } = access;
 	for (const persona of _ALL_PERSONAS) {
 		const c = create.includes(persona);
 		const r = c || read.includes(persona);
-		PERSONA_CAPS[persona][entity] = { c, r, e: c, d: c };
+		PERSONA_CAPS[persona][entity] = {
+			c,
+			r,
+			e: edit.includes(persona),
+			d: del.includes(persona),
+			x: submit.includes(persona),
+		};
 	}
 }

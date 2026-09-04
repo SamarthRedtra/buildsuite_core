@@ -25,7 +25,12 @@ import CostCodePicker from "@/components/CostCodePicker.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import UserAvatar from "@/components/UserAvatar.vue";
 import { activeCompanyFilter } from "@/composables/useActiveCompany";
+import { usePermissions } from "@/composables/usePermissions";
+import { usePagination } from "@/composables/usePagination";
+import DeskPaginationFooter from "@/components/desk/DeskPaginationFooter.vue";
 import { fmtDate, fmtINR } from "@/utils/format";
+
+const { canCreate, canEdit, canDelete } = usePermissions();
 
 // Every account/project/employee picker is scoped to the active (default) company. This is
 // the single-company seam — see useActiveCompany. Empty pre-boot → picker unfiltered, but
@@ -119,6 +124,11 @@ const allExpenses = computed(() => {
 	);
 });
 const myExpenses = computed(() => myExpensesAll.value.filter((e) => inPeriod(e.date)));
+
+// Client-side pagers for the three bespoke expense tables (they render raw <table>s, not DeskList).
+const toSubmitPager = usePagination(toSubmit);
+const allExpensesPager = usePagination(allExpenses);
+const myExpensesPager = usePagination(myExpenses);
 
 // --- detail modal ---
 const detail = ref(null);
@@ -297,10 +307,10 @@ const expenseAccountFilters = computed(() => [
 		<div class="space-y-4">
 			<div class="flex items-center justify-between gap-3">
 				<div class="text-sm text-ink-600">Log site spend. It hits balances &amp; reports once <span class="font-medium">Submitted</span>.</div>
-				<button v-if="canLog" type="button" class="text-xs desk-save-btn whitespace-nowrap" @click="openNew">+ New expense</button>
+				<button v-if="canCreate('expense') && canLog" type="button" class="text-xs desk-save-btn whitespace-nowrap" @click="openNew">+ New expense</button>
 			</div>
 
-			<div v-if="!canLog" class="bg-warning-50 border border-warning-200 rounded-lg px-4 py-3 text-sm text-warning-700">
+			<div v-if="canCreate('expense') && !canLog" class="bg-warning-50 border border-warning-200 rounded-lg px-4 py-3 text-sm text-warning-700">
 				Your user account isn't linked to an Employee, so spend can't be logged. Ask an administrator to set the Employee's User ID.
 			</div>
 
@@ -325,18 +335,19 @@ const expenseAccountFilters = computed(() => [
 						<tr><th class="text-left px-4 py-2">Date</th><th class="text-left px-4 py-2">Description</th><th class="text-left px-4 py-2">By</th><th class="text-left px-4 py-2">Source</th><th class="text-left px-4 py-2">Account</th><th class="text-right px-4 py-2">Amount</th><th class="px-4 py-2"></th></tr>
 					</thead>
 					<tbody>
-						<tr v-for="e in toSubmit" :key="e.name" class="border-b border-ink-100 last:border-0 hover:bg-brand-50/40 cursor-pointer" @click="openDetail(e)">
+						<tr v-for="e in toSubmitPager.pagedRows" :key="e.name" class="border-b border-ink-100 last:border-0 hover:bg-brand-50/40 cursor-pointer" @click="openDetail(e)">
 							<td class="px-4 py-2.5 text-ink-500">{{ fmtDate(e.date) }}</td>
 							<td class="px-4 py-2.5 text-ink-900">{{ e.description }}<span v-if="e.attachment" class="ml-1 text-ink-400">📎</span><div class="text-[10px] text-ink-400">{{ projectName(e) }}</div></td>
 							<td class="px-4 py-2.5 text-ink-700"><div class="flex items-center gap-1.5"><UserAvatar :name="holderName(e)" size="xs" /><span>{{ holderName(e) }}</span></div></td>
 							<td class="px-4 py-2.5"><span class="text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap" :class="sourceChipClass(e.source)">{{ e.source }}</span></td>
 							<td class="px-4 py-2.5 text-ink-600">{{ e.expense_account || e.cost_code || "—" }}</td>
 							<td class="px-4 py-2.5 text-right tabular-nums font-medium text-ink-900">{{ fmtINR(e.amount) }}</td>
-							<td class="px-4 py-2.5 text-right"><button type="button" class="text-[11px] px-2 py-1 bg-brand-600 hover:bg-brand-700 text-white rounded-md" @click.stop="onSubmit(e)">Submit</button></td>
+							<td class="px-4 py-2.5 text-right"><button type="button" class="desk-save-btn" @click.stop="onSubmit(e)">Submit</button></td>
 						</tr>
 					</tbody>
 				</table>
 				<div v-else class="px-4 py-10 text-center text-xs text-ink-400 italic">{{ loading ? "Loading…" : "No draft expenses awaiting submission." }}</div>
+				<DeskPaginationFooter :pager="toSubmitPager" />
 			</section>
 
 			<!-- All Expenses -->
@@ -364,7 +375,7 @@ const expenseAccountFilters = computed(() => [
 							<tr><th class="text-left px-4 py-2">Date</th><th class="text-left px-4 py-2">Description</th><th class="text-left px-4 py-2">By</th><th class="text-left px-4 py-2">Source</th><th class="text-left px-4 py-2">Account</th><th class="text-right px-4 py-2">Amount</th><th class="text-left px-4 py-2">Status</th></tr>
 						</thead>
 						<tbody>
-							<tr v-for="e in allExpenses" :key="e.name" class="border-b border-ink-100 last:border-0 hover:bg-brand-50/30 cursor-pointer" @click="openDetail(e)">
+							<tr v-for="e in allExpensesPager.pagedRows" :key="e.name" class="border-b border-ink-100 last:border-0 hover:bg-brand-50/30 cursor-pointer" @click="openDetail(e)">
 								<td class="px-4 py-2.5 text-ink-500">{{ fmtDate(e.date) }}</td>
 								<td class="px-4 py-2.5 text-ink-900">{{ e.description }}<span v-if="e.attachment" class="ml-1 text-ink-400">📎</span><div class="text-[10px] text-ink-400">{{ projectName(e) }}</div></td>
 								<td class="px-4 py-2.5 text-ink-700"><div class="flex items-center gap-1.5"><UserAvatar :name="holderName(e)" size="xs" /><span>{{ holderName(e) }}</span></div></td>
@@ -376,6 +387,7 @@ const expenseAccountFilters = computed(() => [
 						</tbody>
 					</table>
 					<div v-else class="px-4 py-10 text-center text-xs text-ink-400 italic">No expenses match.</div>
+					<DeskPaginationFooter :pager="allExpensesPager" />
 				</section>
 			</template>
 
@@ -397,7 +409,7 @@ const expenseAccountFilters = computed(() => [
 							<tr><th class="text-left px-4 py-2">Date</th><th class="text-left px-4 py-2">Description</th><th class="text-left px-4 py-2">Project</th><th class="text-left px-4 py-2">Source</th><th class="text-left px-4 py-2">Account</th><th class="text-right px-4 py-2">Amount</th><th class="text-left px-4 py-2">Status</th></tr>
 						</thead>
 						<tbody>
-							<tr v-for="e in myExpenses" :key="e.name" class="border-b border-ink-100 last:border-0 hover:bg-brand-50/30 cursor-pointer" @click="openDetail(e)">
+							<tr v-for="e in myExpensesPager.pagedRows" :key="e.name" class="border-b border-ink-100 last:border-0 hover:bg-brand-50/30 cursor-pointer" @click="openDetail(e)">
 								<td class="px-4 py-2.5 text-ink-500">{{ fmtDate(e.date) }}</td>
 								<td class="px-4 py-2.5 text-ink-900">{{ e.description }}<span v-if="e.attachment" class="ml-1 text-ink-400">📎</span></td>
 								<td class="px-4 py-2.5 text-ink-500">{{ projectName(e) }}</td>
@@ -409,6 +421,7 @@ const expenseAccountFilters = computed(() => [
 						</tbody>
 					</table>
 					<div v-else class="px-4 py-10 text-center text-xs text-ink-400 italic">{{ loading ? "Loading…" : "You haven't logged any expenses." }}</div>
+					<DeskPaginationFooter :pager="myExpensesPager" />
 				</section>
 			</template>
 
@@ -446,11 +459,11 @@ const expenseAccountFilters = computed(() => [
 					</div>
 					<footer class="px-4 py-3 border-t border-ink-200 flex items-center justify-between gap-2 flex-shrink-0">
 						<div class="flex items-center gap-2">
-							<button v-if="detail.status === 'Draft' || (detail.status === 'Cancelled' && canVerify)" type="button" class="text-xs px-2.5 py-1.5 text-danger-600 hover:underline" @click="onDelete(detail)">Delete</button>
+							<button v-if="(detail.status === 'Draft' || (detail.status === 'Cancelled' && canVerify)) && canDelete('expense')" type="button" class="text-xs px-2.5 py-1.5 text-danger-600 hover:underline" @click="onDelete(detail)">Delete</button>
 						</div>
 						<div class="flex items-center gap-2">
 							<button type="button" class="text-xs px-3 py-1.5 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700 rounded-md" @click="closeDetail">Close</button>
-							<button v-if="detail.status === 'Draft'" type="button" class="text-xs px-3 py-1.5 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700 rounded-md" @click="openEdit(detail)">Edit</button>
+							<button v-if="detail.status === 'Draft' && canEdit('expense')" type="button" class="text-xs px-3 py-1.5 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700 rounded-md" @click="openEdit(detail)">Edit</button>
 							<button v-if="detail.status === 'Draft' && canVerify" type="button" class="text-xs desk-save-btn" @click="onSubmit(detail)">Submit</button>
 							<button v-if="detail.status === 'Submitted' && canVerify" type="button" class="text-xs px-3 py-1.5 border border-warning-300 bg-warning-50 hover:bg-warning-100 text-warning-700 font-medium rounded-md" @click="onCancel(detail)">Cancel</button>
 						</div>
@@ -508,3 +521,11 @@ const expenseAccountFilters = computed(() => [
 		</div>
 	</DeskPage>
 </template>
+
+<style scoped>
+/* CTA buttons read black-on-green in dark mode (prototype). The shared .desk-save-btn is
+   green-bg/white-text in dark; scope the black text to this view for now. */
+html.dark .desk-save-btn {
+	color: #0f172a;
+}
+</style>

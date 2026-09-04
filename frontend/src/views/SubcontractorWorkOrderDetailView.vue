@@ -8,6 +8,7 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "@/stores";
 import { useConfirm } from "@/composables/useConfirm";
+import { usePermissions } from "@/composables/usePermissions";
 import { showToast } from "@/utils/appToast";
 import { createDataAdapter } from "@/data/adapters";
 import { useDocTypeList } from "@/composables/useDocTypeList";
@@ -26,6 +27,13 @@ import { fmtDate, fmtINR } from "@/utils/format";
 const props = defineProps({ id: String });
 const router = useRouter();
 const confirmDialog = useConfirm();
+const { canCreate, canEdit, canDelete, canSubmit } = usePermissions();
+// These buttons create OTHER entities from the WO, so each follows that entity's create
+// rights — not the WO's. A WO-full persona that is read-only on Measurement Book / on
+// Subcontractor Bill (e.g. Director/Owner) can open + submit the WO but must not see the
+// "+ Record measurement" / "+ Bill progress" buttons.
+const canRecordMeasurement = computed(() => canCreate("measurementBook"));
+const canRaiseBill = computed(() => canCreate("subcontractorBill"));
 const adapter = createDataAdapter(useDataStore());
 
 const wo = ref(null);
@@ -208,7 +216,7 @@ const tabs = computed(() => [
 	>
 		<template #actions>
 			<button
-				v-if="isDraft"
+				v-if="isDraft && canEdit('subcontractorWorkOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700"
 				style="border-radius: 6px"
@@ -217,7 +225,7 @@ const tabs = computed(() => [
 				Edit
 			</button>
 			<button
-				v-if="isDraft"
+				v-if="isDraft && canSubmit('subcontractorWorkOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-brand-300 bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium"
 				style="border-radius: 6px"
@@ -227,7 +235,7 @@ const tabs = computed(() => [
 				Submit
 			</button>
 			<button
-				v-if="isSubmitted"
+				v-if="isSubmitted && canRecordMeasurement"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-info-200 bg-info-50 hover:bg-info-100 text-info-700 font-medium"
 				style="border-radius: 6px"
@@ -237,7 +245,7 @@ const tabs = computed(() => [
 				+ Record measurement
 			</button>
 			<button
-				v-if="isSubmitted"
+				v-if="isSubmitted && canRaiseBill"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-brand-300 bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium inline-flex items-center"
 				style="border-radius: 6px"
@@ -247,7 +255,7 @@ const tabs = computed(() => [
 				+ Bill progress
 			</button>
 			<button
-				v-if="isSubmitted"
+				v-if="isSubmitted && canSubmit('subcontractorWorkOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-warning-300 bg-warning-50 hover:bg-warning-100 text-warning-700 font-medium"
 				style="border-radius: 6px"
@@ -257,7 +265,7 @@ const tabs = computed(() => [
 				Cancel
 			</button>
 			<button
-				v-if="isCancelled"
+				v-if="isCancelled && canCreate('subcontractorWorkOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-brand-300 bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium"
 				style="border-radius: 6px"
@@ -277,7 +285,7 @@ const tabs = computed(() => [
 				Print / PDF
 			</button>
 			<button
-				v-if="!isSubmitted"
+				v-if="!isSubmitted && canDelete('subcontractorWorkOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-danger-200 bg-white hover:bg-danger-50 text-danger-700"
 				style="border-radius: 6px"
@@ -458,7 +466,7 @@ const tabs = computed(() => [
 					Measurement books ({{ mbs.length }})
 				</h3>
 				<button
-					v-if="isSubmitted"
+					v-if="isSubmitted && canRecordMeasurement"
 					type="button"
 					class="text-xs text-brand-700 hover:underline"
 					@click="onRecordMeasurement"
@@ -518,7 +526,7 @@ const tabs = computed(() => [
 					Bills ({{ bills.length }})
 				</h3>
 				<button
-					v-if="isSubmitted"
+					v-if="isSubmitted && canRaiseBill"
 					type="button"
 					class="text-xs text-brand-700 hover:underline"
 					@click="onRaiseBill"
@@ -576,7 +584,7 @@ const tabs = computed(() => [
 					Terms &amp; conditions
 				</h3>
 				<button
-					v-if="isDraft"
+					v-if="isDraft && canEdit('subcontractorWorkOrder')"
 					type="button"
 					class="text-xs text-brand-700 hover:underline"
 					@click="onEdit"

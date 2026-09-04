@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, RouterLink } from "vue-router";
 import { useDataStore } from "@/stores";
 import { useSessionStore } from "@/stores/session";
@@ -21,6 +21,15 @@ const searchOpen = ref(false);
 const sidebarOpen = ref(false);
 function closeSidebar() {
 	sidebarOpen.value = false;
+}
+
+// Desktop-only rail collapse (lg+). Below lg the sidebar is a full-width drawer,
+// so collapse never applies there — every collapsed style is `lg:`-prefixed.
+// Persisted so the choice survives navigation + reload.
+const collapsed = ref(localStorage.getItem("bs-nav-collapsed") === "1");
+watch(collapsed, (v) => localStorage.setItem("bs-nav-collapsed", v ? "1" : "0"));
+function toggleCollapse() {
+	collapsed.value = !collapsed.value;
 }
 function toggleTheme() {
 	store.toggleTheme();
@@ -107,12 +116,49 @@ const ACCESS_HINTS = {
 	"mr-only": { label: "MR", title: "Material-request raise only" },
 };
 
+// ERPNext-inherited workspaces link OUT to the real Frappe desk (full-page nav), not to
+// SPA routes — the SPA doesn't reimplement Accounting/Buying/Stock/Assets/HR, so their nav
+// rows open the actual ERPNext workspaces. Routes match the standard ERPNext workspace slugs.
+const ERPNEXT_DESK_ROUTES = {
+	accounting: "accounting",
+	buying: "buying",
+	stock: "stock",
+	assets: "assets",
+	hr: "hr",
+};
+function deskWorkspaceUrl(slug) {
+	return `${getDeskUrl()}/${ERPNEXT_DESK_ROUTES[slug] || slug}`;
+}
+
+// Per-session collapse for the ERPNext nav group — closed by default. A construction user
+// works in the BuildSuite group all day and drops into ERPNext occasionally, so its rows are
+// hidden until asked for. State lives on the layout (survives navigation) and resets on
+// reload, keeping "closed by default" true every time the app opens.
+const collapsedGroups = ref({ erpnext: true });
+function toggleGroup(key) {
+	collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] };
+}
+function groupCollapsed(group) {
+	return !!(group.collapsible && collapsedGroups.value[group.key]);
+}
+// Group-collapse applies only in the expanded sidebar; the icon rail always shows every item
+// (there is no group header there to reopen a collapsed group).
+function renderItems(group) {
+	return groupCollapsed(group) && !collapsed.value ? [] : group.items;
+}
+
 // Sidebar groups for the active role.
 // Home is synthesized as the first BuildSuite item and Site Execution is pinned
 // second when visible because it is the highest-frequency workspace.
 const navGroups = computed(() => {
 	const HOME_ITEM = { slug: "home", name: "Home", to: "/home", group: "buildsuite", hint: null };
 	const buildsuiteItems = [HOME_ITEM];
+	// Insights — ask-a-question reporting. First layer is leadership-only (Director /
+	// PM / Administrator); it's a standalone feature, not a workspace, so it's pinned
+	// here rather than driven off the workspace-visibility matrix.
+	if (["director", "pm", "admin", "bsa"].includes(store.role)) {
+		buildsuiteItems.push({ slug: "insights", name: "Insights", to: "/insights", icon: "💡", group: "buildsuite", hint: null });
+	}
 	const erpnextItems = [];
 	const otherBuildsuiteItems = [];
 	for (const slug of store.visibleWorkspaces) {
@@ -122,8 +168,12 @@ const navGroups = computed(() => {
 		const access = store.workspaceAccess(slug);
 		const hint = access && access !== "full" ? ACCESS_HINTS[access] : null;
 		const item = { slug, ...meta, hint };
-		if (meta.group === "buildsuite") otherBuildsuiteItems.push(item);
-		else erpnextItems.push(item);
+		if (meta.group === "buildsuite") {
+			otherBuildsuiteItems.push(item);
+		} else {
+			// Link to the real ERPNext desk workspace (full-page nav), not the SPA route.
+			erpnextItems.push({ ...item, external: true, href: deskWorkspaceUrl(slug) });
+		}
 	}
 
 	if (store.visibleWorkspaces.includes("site-execution")) {
@@ -151,6 +201,8 @@ const navGroups = computed(() => {
 			key: "erpnext",
 			title: "ERPNext",
 			muted: true,
+			// Collapsible, closed by default — the inherited workspaces are occasional-use.
+			collapsible: true,
 			// Only render the top-border separator when there's a BuildSuite group above it;
 			// otherwise it looks like an orphan rule at the top of the nav.
 			topSeparator: groups.length > 0,
@@ -174,8 +226,11 @@ const navGroups = computed(() => {
 
 		<!-- Sidebar — sticky on lg+; slide-in drawer below that breakpoint. -->
 		<aside
-			class="w-60 bg-white border-r border-ink-200 flex flex-col flex-shrink-0 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 fixed inset-y-0 left-0 z-50 transform transition-transform duration-200"
-			:class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+			class="w-60 bg-white border-r border-ink-200 flex flex-col flex-shrink-0 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 fixed inset-y-0 left-0 z-50 transform transition-all duration-200"
+			:class="[
+				sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+				collapsed ? 'lg:w-16' : 'lg:w-60',
+			]"
 		>
 			<!-- App-branding dropdown (prototype S149): Go to Desktop / Logout.
            The "Core" badge moved into the dropdown sub-line. -->
@@ -183,17 +238,19 @@ const navGroups = computed(() => {
 				<button
 					type="button"
 					class="w-full h-full flex items-center justify-between text-left hover:bg-ink-50 pl-3 pr-2"
-					:class="appMenuOpen ? 'bg-ink-50' : ''"
+					:class="[appMenuOpen ? 'bg-ink-50' : '', collapsed ? 'lg:justify-center lg:px-0' : '']"
 					title="BuildSuite"
 					@click="toggleAppMenu"
 				>
 					<span class="flex items-center gap-2">
 						<LogoIcon :size="26" />
-						<span class="font-semibold text-ink-900 text-sm">BuildSuite</span>
+						<span class="font-semibold text-ink-900 text-sm" :class="collapsed ? 'lg:hidden' : ''"
+							>BuildSuite</span
+						>
 					</span>
 					<svg
 						class="w-4 h-4 text-ink-400 transition-transform"
-						:class="appMenuOpen ? 'rotate-180' : ''"
+						:class="[appMenuOpen ? 'rotate-180' : '', collapsed ? 'lg:hidden' : '']"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -259,12 +316,14 @@ const navGroups = computed(() => {
 				</div>
 			</div>
 
-			<div class="px-3 py-2">
+			<div class="px-3 py-2" :class="collapsed ? 'lg:px-2' : ''">
 				<button
 					@click="searchOpen = true"
 					class="w-full px-2.5 py-1.5 text-xs bg-ink-50 text-ink-600 rounded flex items-center gap-2 hover:bg-ink-100"
+					:class="collapsed ? 'lg:justify-center lg:px-0' : ''"
+					:title="collapsed ? 'Search (⌘K)' : ''"
 				>
-					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
@@ -272,9 +331,10 @@ const navGroups = computed(() => {
 							d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
 						/>
 					</svg>
-					Search or jump to...
+					<span :class="collapsed ? 'lg:hidden' : ''">Search or jump to...</span>
 					<span
 						class="ml-auto text-[10px] text-ink-400 font-mono bg-white px-1.5 py-0.5 rounded border border-ink-200"
+						:class="collapsed ? 'lg:hidden' : ''"
 						>⌘K</span
 					>
 				</button>
@@ -287,8 +347,19 @@ const navGroups = computed(() => {
 					class="mb-1"
 					:class="group.topSeparator ? 'mt-4 pt-3 border-t border-ink-100' : 'mt-2'"
 				>
-					<div class="px-2 py-1.5">
-						<div
+					<!-- A collapsible group's label is the toggle; a fixed one stays a plain label
+					     so it doesn't invite a click that does nothing. -->
+					<component
+						:is="group.collapsible ? 'button' : 'div'"
+						:type="group.collapsible ? 'button' : null"
+						class="px-2 py-1.5 w-full text-left"
+						:class="[
+							group.collapsible ? 'flex items-center gap-1.5 rounded hover:bg-ink-50' : '',
+							collapsed ? 'lg:hidden' : '',
+						]"
+						@click="group.collapsible ? toggleGroup(group.key) : null"
+					>
+						<span
 							class="font-semibold uppercase tracking-wider"
 							:class="
 								group.muted
@@ -297,21 +368,39 @@ const navGroups = computed(() => {
 							"
 						>
 							{{ group.title }}
-						</div>
-						<div
-							v-if="group.caption"
-							class="text-[9px] text-ink-400 font-normal normal-case tracking-normal mt-0.5"
+						</span>
+						<span
+							v-if="group.collapsible"
+							class="text-[9px] text-ink-300 tabular-nums"
+							>{{ group.items.length }}</span
 						>
-							{{ group.caption }}
-						</div>
-					</div>
-					<RouterLink
-						v-for="item in group.items"
-						:key="item.to"
-						:to="item.to"
+						<svg
+							v-if="group.collapsible"
+							class="w-3 h-3 text-ink-300 ml-auto flex-shrink-0 transition-transform"
+							:class="groupCollapsed(group) ? '-rotate-90' : ''"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<polyline points="6 9 12 15 18 9" />
+						</svg>
+					</component>
+					<!-- BuildSuite items are SPA routes (RouterLink); ERPNext items link out to the
+					     real Frappe desk (<a href> → full-page nav). Collapsed groups render no items. -->
+					<component
+						:is="item.external ? 'a' : 'RouterLink'"
+						v-for="item in renderItems(group)"
+						:key="item.slug || item.to"
+						v-bind="item.external ? { href: item.href } : { to: item.to, activeClass: 'active' }"
 						class="desk-nav-link flex items-center gap-2.5 px-2 py-1.5 rounded hover:bg-ink-50"
-						:class="group.muted ? 'text-sm text-ink-500' : 'text-sm text-ink-700'"
-						active-class="active"
+						:class="[
+							group.muted ? 'text-sm text-ink-500' : 'text-sm text-ink-700',
+							collapsed ? 'lg:justify-center' : '',
+						]"
+						:title="collapsed ? item.name : ''"
 						@click="closeSidebar"
 					>
 						<span
@@ -330,16 +419,40 @@ const navGroups = computed(() => {
 								v-html="getWorkspaceIconPath(item.slug)"
 							/>
 						</span>
-						<span class="flex-1 truncate">{{ item.name }}</span>
+						<span class="flex-1 truncate" :class="collapsed ? 'lg:hidden' : ''">{{ item.name }}</span>
 						<span
 							v-if="item.hint"
 							:title="item.hint.title"
 							class="text-[9px] font-medium text-ink-400 border border-ink-200 rounded px-1 leading-4 flex-shrink-0"
+							:class="collapsed ? 'lg:hidden' : ''"
 							>{{ item.hint.label }}</span
 						>
-					</RouterLink>
+					</component>
 				</div>
 			</nav>
+
+			<!-- Collapse toggle — desktop only (below lg the sidebar is a drawer). -->
+			<button
+				type="button"
+				class="hidden lg:flex items-center gap-2 mx-2 mb-1 px-2 py-1.5 rounded text-xs text-ink-500 hover:bg-ink-50"
+				:class="collapsed ? 'lg:justify-center lg:mx-1' : ''"
+				:title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+				@click="toggleCollapse"
+			>
+				<svg
+					class="w-4 h-4 flex-shrink-0 transition-transform"
+					:class="collapsed ? 'rotate-180' : ''"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.75"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path d="M15 18l-6-6 6-6" />
+				</svg>
+				<span :class="collapsed ? 'lg:hidden' : ''">Collapse</span>
+			</button>
 
 			<!-- Profile entry (prototype S149) — replaces the footer Settings link.
            Settings is still reachable from the topbar gear. No flow wired yet. -->
@@ -347,11 +460,12 @@ const navGroups = computed(() => {
 				<button
 					type="button"
 					class="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-ink-700 hover:bg-ink-50 rounded"
-					title="Profile"
+					:class="collapsed ? 'lg:justify-center' : ''"
+					:title="collapsed ? profileName : 'Profile'"
 					@click="closeSidebar"
 				>
 					<UserAvatar :user-id="profileUser" size="sm" />
-					<div class="flex-1 min-w-0 text-left">
+					<div class="flex-1 min-w-0 text-left" :class="collapsed ? 'lg:hidden' : ''">
 						<div class="truncate font-medium text-ink-900">{{ profileName }}</div>
 						<div class="truncate text-[10px] text-ink-500">{{ profileRole }}</div>
 					</div>

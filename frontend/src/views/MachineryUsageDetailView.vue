@@ -5,6 +5,7 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "@/stores";
 import { useConfirm } from "@/composables/useConfirm";
+import { usePermissions } from "@/composables/usePermissions";
 import { useFormErrors } from "@/composables/useFormErrors";
 import { useDocTypeList } from "@/composables/useDocTypeList";
 import { useProjectNames } from "@/composables/useProjectNames";
@@ -24,6 +25,7 @@ const props = defineProps({ id: String });
 const router = useRouter();
 const confirmDialog = useConfirm();
 const adapter = createDataAdapter(useDataStore());
+const { canEdit, canDelete } = usePermissions();
 const { projectName } = useProjectNames();
 const { errors, applyServerErrors, setErrors } = useFormErrors({ machine: "machine" });
 
@@ -43,6 +45,8 @@ const machineryOptions = computed(() =>
 		hint: [m.machinery_type, m.ownership].filter(Boolean).join(" · "),
 	}))
 );
+// Machinery is hash-named, so show its label instead — like projectName() below.
+const machineName = (id) => machineryOptions.value.find((o) => o.value === id)?.label || id;
 const projectRes = useDocTypeList("Project", {
 	fields: ["name", "project_name"],
 	orderBy: "project_name asc",
@@ -150,20 +154,20 @@ const breadcrumbs = computed(() => [
 	{ label: "BuildSuite Core", to: "/" },
 	{ label: "Equipment", to: "/equipment" },
 	{ label: "Machinery Usage", to: "/machinery-usage" },
-	{ label: doc.value ? `${doc.value.machine} · ${fmtDate(doc.value.date)}` : props.id },
+	{ label: doc.value ? `${machineName(doc.value.machine)} · ${fmtDate(doc.value.date)}` : props.id },
 ]);
 </script>
 
 <template>
 	<DeskPage
 		v-if="doc"
-		:title="`${doc.machine} — ${fmtDate(doc.date)}`"
+		:title="`${machineName(doc.machine)} — ${fmtDate(doc.date)}`"
 		:subtitle="`${doc.quantity} ${doc.unit} · ${viewTotal}`"
 		:breadcrumbs="breadcrumbs"
 	>
 		<template #actions>
 			<button
-				v-if="!editing"
+				v-if="!editing && canEdit('machineryUsage')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700"
 				style="border-radius: 6px"
@@ -172,7 +176,7 @@ const breadcrumbs = computed(() => [
 				Edit
 			</button>
 			<button
-				v-if="!editing"
+				v-if="!editing && canDelete('machineryUsage')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-danger-200 bg-white hover:bg-danger-50 text-danger-700"
 				style="border-radius: 6px"
@@ -190,7 +194,7 @@ const breadcrumbs = computed(() => [
 				Cancel
 			</button>
 			<button
-				v-if="editing"
+				v-if="editing && canEdit('machineryUsage')"
 				type="button"
 				class="desk-save-btn"
 				:disabled="saving"
@@ -204,7 +208,7 @@ const breadcrumbs = computed(() => [
 		<div v-if="!editing">
 			<DeskSection title="Usage" :cols="3">
 				<DeskField label="Machine">
-					<DeskLink :to="`/machinery/${doc.machine}`">{{ doc.machine }}</DeskLink>
+					<DeskLink :to="`/machinery/${doc.machine}`">{{ machineName(doc.machine) }}</DeskLink>
 				</DeskField>
 				<DeskField label="Project"
 					><div class="text-sm text-ink-700">

@@ -33,3 +33,11 @@ buildsuite_core.patches.reseed_project_finance_bespoke_views # 2026-08-20
 buildsuite_core.patches.fix_stage_planning_workflow_roles # 2026-08-20
 buildsuite_core.patches.reseed_procurement_bespoke_reports # 2026-08-20
 buildsuite_core.patches.grant_child_table_read_access # 2026-08-21
+buildsuite_core.patches.resync_director_permission_matrix # 2026-08-24
+buildsuite_core.patches.repoint_pnl_to_bespoke # 2026-08-25
+buildsuite_core.patches.resync_picker_select_permissions
+buildsuite_core.patches.backfill_persona_roles # 2026-09-01
+buildsuite_core.patches.resync_mobile_permissions # 2026-09-03 mobile app perms
+buildsuite_core.patches.strip_read_mirror_overreach # 2026-09-03 scope persona ERPNext footprint
+buildsuite_core.patches.resync_derived_attendance_perms # 2026-09-04 derived registers read-only
+buildsuite_core.patches.drop_manager_employee_user_permissions # 2026-09-04 roster mgrs see all employees

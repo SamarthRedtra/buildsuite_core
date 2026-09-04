@@ -115,6 +115,10 @@ _FULL_SUB = {**_FULL, "submit": 1, "cancel": 1, "amend": 1}  # CRWDSX
 _RAISE = {"read": 1, "create": 1, "print": 1}  # CR — raise own records only
 _CRWS = {"read": 1, "write": 1, "create": 1, "submit": 1, "report": 1, "print": 1}  # CRWS
 _CRW = {"read": 1, "write": 1, "create": 1, "report": 1, "print": 1}  # CRW — edit, no delete
+# Select-only: the role may resolve the doctype in a LINK-FIELD PICKER (frappe.get_list honours
+# `select` — verified) but cannot list / report / export it. Used for reference masters a persona
+# only ever picks, never opens a screen for. Applied with _SELECT_PTYPES so read is cleared.
+_SELECT = {"select": 1, "print": 1}  # S — pick in a link field, no read
 
 # Assembly + Estimate Template: full for the estimation roles, hidden for the rest.
 ASSEMBLY_TEMPLATE_ROLE_PERMS = {role: _FULL for role in _ESTIMATION_ROLES}
@@ -159,9 +163,12 @@ PURCHASE_RECEIPT_ROLE_PERMS = {
 }
 PURCHASE_INVOICE_ROLE_PERMS = {
 	"BuildSuite Administrator": _FULL_SUB,
-	"BuildSuite Director": _READ,
-	"BuildSuite PM": _READ,
+	# Supplier Bill — the Director/Owner owns supplier invoicing end to end, so full CRWDSX
+	# (not read-only): raise, edit, submit, cancel + amend a supplier invoice.
+	"BuildSuite Director": _FULL_SUB,
+	"BuildSuite PM": _CRW,  # PM raises + edits supplier bills; the Accountant submits/cancels them
 	"BuildSuite Procurement Officer": _READ,
+	"BuildSuite Store Keeper": _READ,  # reads supplier bills (custody/receipt context), never edits
 	"BuildSuite Accountant": _FULL_SUB,  # Accountant owns invoicing
 }
 STOCK_ENTRY_ROLE_PERMS = {
@@ -333,6 +340,9 @@ _PTYPES = ("read", "write", "create", "delete", "report", "export", "print")
 # Submittable doctypes (Material Request, Purchase Order, Stock Entry, …) also carry
 # the transition ptypes.
 _SUBMIT_PTYPES = _PTYPES + ("submit", "cancel", "amend")
+# Picker-only reference masters carry `select` too — include it so a _SELECT grant sets select=1
+# AND clears read/report/export/print (which are in _PTYPES).
+_SELECT_PTYPES = _PTYPES + ("select",)
 
 
 def _ensure_role(role_name):
@@ -444,7 +454,8 @@ def setup_estimation_master_permissions():
 	for doctype in ("Assembly", "Estimate Template"):
 		_apply_role_perms(doctype, ASSEMBLY_TEMPLATE_ROLE_PERMS)
 	_apply_role_perms("Construction Rate Master", RATE_MASTER_ROLE_PERMS)
-	_apply_role_perms("UOM", {role: _READ for role in _UOM_READ_ROLES})
+	# UOM is a pure link-picker target (unit dropdown on BOQ / Rate Master) — select, not read.
+	_apply_role_perms("UOM", {role: _SELECT for role in _UOM_READ_ROLES}, _SELECT_PTYPES)
 
 
 def setup_purchase_stock_permissions():
@@ -548,31 +559,51 @@ _SUBCONTRACT_READ_ROLES = ("BuildSuite QS", "BuildSuite Site Engineer", "BuildSu
 SUBCONTRACT_ROLE_PERMS = {
 	**{role: _FULL for role in _SUBCONTRACT_FULL_ROLES},
 	**{role: _READ for role in _SUBCONTRACT_READ_ROLES},
+	"BuildSuite PM": _CRW,  # PM maintains subcontractors (edit) but does not delete them
+	"BuildSuite QS": _FULL,  # QS maintains subcontractors fully (per the QS ruling), not read-only
+	"BuildSuite Accountant": _FULL,  # Accountant maintains subcontractors fully (per the Accountant ruling)
+	"BuildSuite Estimator": _READ,  # Estimator reads subcontractors (per the Estimator ruling)
 }
-# Trade / Delivery Type masters — read for everyone in the module, write for
-# procurement + admins (they're resolved by the WO link pickers).
+# Trade / Delivery Type masters — pure WO link-picker targets (no screen), so everyone in the
+# module only SELECTs them; Procurement + admins maintain the master (full CRWD).
 SUBCONTRACT_MASTER_ROLE_PERMS = {
-	**{role: _READ for role in _SUBCONTRACT_FULL_ROLES + _SUBCONTRACT_READ_ROLES},
+	**{role: _SELECT for role in _SUBCONTRACT_FULL_ROLES + _SUBCONTRACT_READ_ROLES},
 	"BuildSuite Procurement Officer": _FULL,
 	"BuildSuite Administrator": _FULL,
 }
-# Measurement Book — the QS + Site Engineer record and certify site measurements,
-# so they get full CRUD here (they only read the WO/Subcontractor masters).
-_MB_FULL_ROLES = _SUBCONTRACT_FULL_ROLES + ("BuildSuite QS", "BuildSuite Site Engineer")
+# Measurement Book — the QS records + certifies site measurements (full CRUD). The
+# Site Engineer only RAISES measurement books (create + read; no edit/delete/certify,
+# per the Site Engineer ruling), so it's create-only below, not full. The Director is
+# oversight-only (read, per the Director/Owner ruling). The Procurement Officer has NO
+# MB access at all (per the Procurement ruling), so it is excluded from the full roles
+# and gets no grant (revoked by _apply_role_perms).
+_MB_FULL_ROLES = tuple(r for r in _SUBCONTRACT_FULL_ROLES if r != "BuildSuite Procurement Officer") + (
+	"BuildSuite QS",
+)
 MEASUREMENT_BOOK_ROLE_PERMS = {
 	**{role: _FULL for role in _MB_FULL_ROLES},
+	"BuildSuite Site Engineer": _RAISE,  # raise only — create + read, never edit/delete/certify
+	"BuildSuite Director": _READ,  # oversight only — read, never edit
+	"BuildSuite Estimator": _READ,  # read-only (per the Estimator ruling)
 	"BuildSuite Accountant": _READ,
 }
 # Subcontractor Bill (RA Bill) — submittable. The QS + subcontract full roles raise and
 # submit progress bills; the Accountant + Site Engineer + Estimator read them. Every role that
 # can read a Work Order reads Bills too — the WO list shows a "% billed" column sourced from
 # them, so a WO reader without Bill read would 403 the whole list.
+# NOTE: `_BILL_FULL_ROLES` is shared with the Work Order matrix (where the Director stays
+# full CRWDSX). On the Bill, the Director is oversight-only — the explicit `_READ` below wins
+# over the `_FULL_SUB` spread, so the Director reads bills but never raises/submits them.
 _BILL_FULL_ROLES = _SUBCONTRACT_FULL_ROLES + ("BuildSuite QS",)
 SUBCONTRACT_BILL_ROLE_PERMS = {
 	**{role: _FULL_SUB for role in _BILL_FULL_ROLES},
-	"BuildSuite Accountant": _READ,
+	"BuildSuite Director": _READ,  # oversight only — read, never raise/submit a bill
+	"BuildSuite PM": _CRW,  # PM prepares bills (create/edit) but the QS submits them
+	"BuildSuite Procurement Officer": _CRW,  # prepares bills (create/edit); QS submits, so no S/X
+	"BuildSuite Accountant": _FULL_SUB,  # Accountant owns bill posting fully (per the Accountant ruling)
 	"BuildSuite Site Engineer": _READ,
-	"BuildSuite Estimator": _READ,
+	# Estimator has NO Subcontractor Bill access (per the Estimator ruling) — omitted, so
+	# _apply_role_perms revokes any prior grant.
 }
 # Subcontractor Work Order — the commitment document is natively submittable (Draft →
 # Submitted → Cancelled + Amend), so the full roles get CRWDSX, not just CRWD. QS prepares
@@ -619,6 +650,10 @@ PETTY_CASH_ROLE_PERMS = {
 	"BuildSuite Accountant": _FULL,
 	"BuildSuite Site Engineer": _PETTY_CASH_SITE,
 	"BuildSuite Foreman": _PETTY_CASH_SITE,
+	"BuildSuite Store Keeper": _RAISE,  # raises petty-cash requests (create + read); no edit/disburse
+	"BuildSuite Procurement Officer": _RAISE,  # raises petty-cash requests (create + read)
+	"BuildSuite Estimator": _RAISE,  # raises petty-cash requests (create + read)
+	"BuildSuite HR Manager": _RAISE,  # raises petty-cash requests (create + read)
 	"BuildSuite QS": _READ,
 }
 PETTY_CASH_DISBURSE_ROLES = (
@@ -640,7 +675,11 @@ EXPENSE_ENTRY_ROLE_PERMS = {
 	"BuildSuite Accountant": _FULL_SUB,
 	"BuildSuite Site Engineer": _EXPENSE_ENTRY_DRAFT,
 	"BuildSuite Foreman": _EXPENSE_ENTRY_DRAFT,
-	"BuildSuite QS": _READ,
+	"BuildSuite Store Keeper": _RAISE,  # raises expense entries (create + read); finance approves/submits
+	"BuildSuite Procurement Officer": _RAISE,  # raises expense entries (create + read)
+	"BuildSuite QS": _RAISE,  # raises expense entries (create + read), per the QS ruling
+	"BuildSuite Estimator": _RAISE,  # raises expense entries (create + read)
+	"BuildSuite HR Manager": _RAISE,  # raises expense entries (create + read)
 }
 
 
@@ -657,17 +696,25 @@ def setup_subcontract_permissions():
 	# Subcontractors are native Suppliers (supplier_type="Subcontractor") — grant the
 	# BuildSuite roles CRUD on Supplier so the Vue "Subcontractor" screens work.
 	_apply_role_perms("Supplier", SUBCONTRACT_ROLE_PERMS)
+	# Store Keeper posts receipts against suppliers and reads the supplier in that custody/receipt
+	# context. This used to arrive as a read-mirror side-effect; now that the mirror only grants
+	# `select` on link targets, make Store Keeper's supplier read an explicit, authored grant.
+	_upgrade_role_perms("Supplier", {"BuildSuite Store Keeper": _READ}, _PTYPES)
 	_apply_role_perms("Subcontractor Work Order", SUBCONTRACT_WO_ROLE_PERMS, _SUBMIT_PTYPES)
 	_apply_role_perms("Measurement Book", MEASUREMENT_BOOK_ROLE_PERMS)
 	_apply_role_perms("Subcontractor Bill", SUBCONTRACT_BILL_ROLE_PERMS, _SUBMIT_PTYPES)
-	_apply_role_perms("Construction Trade", SUBCONTRACT_MASTER_ROLE_PERMS)
-	_apply_role_perms("Subcontract Delivery Type", SUBCONTRACT_MASTER_ROLE_PERMS)
+	_apply_role_perms("Construction Trade", SUBCONTRACT_MASTER_ROLE_PERMS, _SELECT_PTYPES)
+	_apply_role_perms("Subcontract Delivery Type", SUBCONTRACT_MASTER_ROLE_PERMS, _SELECT_PTYPES)
 	# The bill's billing pickers (expense account, tax template, withholding category) read
 	# ERPNext's accounting masters — grant the finance-facing BuildSuite roles read so the
 	# Vue dropdowns populate for non-admin personas.
-	_billing_read = {role: _READ for role in _BILL_FULL_ROLES + ("BuildSuite Accountant",)}
-	for dt in ("Account", "Purchase Taxes and Charges Template", "Tax Category", "Tax Withholding Category"):
-		_apply_role_perms(dt, _billing_read)
+	_billing_roles = _BILL_FULL_ROLES + ("BuildSuite Accountant",)
+	# Account keeps read (it has a Finance Accounts screen + the disburse/JE context reads it).
+	_apply_role_perms("Account", {role: _READ for role in _billing_roles})
+	# The tax-template masters are pure billing-picker targets (no screen) — select, not read.
+	_billing_select = {role: _SELECT for role in _billing_roles}
+	for dt in ("Purchase Taxes and Charges Template", "Tax Category", "Tax Withholding Category"):
+		_apply_role_perms(dt, _billing_select, _SELECT_PTYPES)
 
 
 # --- M3 — Workforce -----------------------------------------------------------
@@ -736,7 +783,9 @@ def setup_workforce_permissions():
 		# user). The derived rule is "no role edits directly", so drop any `All` custom
 		# grant before seeding the read-only BuildSuite matrix.
 		frappe.db.delete("Custom DocPerm", {"parent": dt, "role": "All"})
-		_apply_role_perms(dt, DERIVED_ATTENDANCE_ROLE_PERMS)
+		# These are submittable but DERIVED — manage the submit ptypes too, so read-only really
+		# means read-only (no role keeps submit/cancel, e.g. from the earlier mobile-full grant).
+		_apply_role_perms(dt, DERIVED_ATTENDANCE_ROLE_PERMS, _SUBMIT_PTYPES)
 
 
 # --- M3 — Equipment -----------------------------------------------------------
@@ -795,6 +844,7 @@ SALES_INVOICE_ROLE_PERMS = {
 	"BuildSuite Accountant": _FULL_SUB,
 	"BuildSuite PM": _READ,
 	"BuildSuite QS": _READ,
+	"BuildSuite Estimator": _READ,  # read-only billing context (per the Estimator ruling)
 }
 # Payment Entry (money movement) — Accountant + admin tier create and submit; it is
 # created from the document being settled, never a blank form. Director + PM +
@@ -805,6 +855,7 @@ PAYMENT_ENTRY_ROLE_PERMS = {
 	"BuildSuite Director": _READ,
 	"BuildSuite PM": _READ,
 	"BuildSuite Procurement Officer": _READ,
+	"BuildSuite Estimator": _READ,  # read-only (customer advances context, per the Estimator ruling)
 }
 
 
@@ -914,21 +965,29 @@ _READ_MIRROR_DENYLIST = {
 	"Email Account",
 }
 
-
 def setup_child_table_read_access():
-	"""Grant each BuildSuite role read on the doctypes REFERENCED by every parent it can read —
-	the parent's child (Table) doctypes AND its Link-field targets.
+	"""Give each BuildSuite role the MINIMAL grant on the doctypes referenced by every parent it
+	can read — `read` on the parent's child (Table) doctypes, `select` on its Link-field targets.
 
-	Custom DocPerms completely override standard perms, so a role granted read on a parent has
-	NO grant on the child tables or linked masters that parent's list/detail views render (line
-	items, a `trade` → Labour Trade column, a filter dropdown, …) — and the fetch then 403s
-	(e.g. HR Manager reads Crew but not its `trade` → Labour Trade). Mirroring read to those
-	referenced doctypes closes that class of gap. Read only (never write/delete), layered on top
-	of existing perms, system doctypes excluded — idempotent."""
+	Custom DocPerms completely override standard perms, so a role granted read on a parent has NO
+	grant on the child tables its detail view renders (line items 403) or on the masters its Link
+	fields point at (the picker dropdown / link validation fails). We close both gaps, but with the
+	RIGHT ptype for each:
+
+	- Child tables get `read`: their rows ARE the parent's data, rendered inline with it.
+	- Link targets get `select`, NOT `read`. `select` is all a link field needs — the picker
+	  endpoint (`frappe.get_list`) and link validation honour it — whereas `read` would ALSO let
+	  the persona list / report / export / open that master and surface its Desk workspace. Blanket
+	  `read` on every link target is exactly what leaked almost all of ERPNext into every persona
+	  (Stock Entry → Work Order → all of Manufacturing, …). A reference granted with `select` is
+	  harmless: pick-ability, not browse. This matches the `_SELECT` convention the base matrix
+	  already uses for picker-only masters (see the resync_picker_select_permissions patch).
+
+	Layered on top of existing perms (never revokes), system doctypes excluded — idempotent."""
 	# Parents = doctypes with a REAL perm-map grant, identified by print=1 (every perm shorthand
-	# — _READ/_FULL/_RAISE/… — carries it). This deliberately excludes the mirror's OWN grants
-	# (which set only read=1), so a re-run doesn't treat mirror-granted masters as parents and
-	# fan out second-order — that's what keeps after_migrate fast.
+	# — _READ/_FULL/_RAISE/… — carries it). This excludes the mirror's OWN grants (read=1/print=0
+	# on child tables, select=1/print=0 on link targets), so a re-run doesn't treat a mirrored
+	# doctype as a parent and fan out second-order — that's what keeps after_migrate fast.
 	grants = frappe.get_all(
 		"Custom DocPerm",
 		filters={"read": 1, "print": 1, "permlevel": 0, "role": ["in", list(BUILDSUITE_ROLES)]},
@@ -938,25 +997,28 @@ def setup_child_table_read_access():
 	for g in grants:
 		roles_by_parent.setdefault(g.doctype, set()).add(g.role)
 
-	# desired[ref] = the roles that should be able to read `ref` (a child table or link target).
-	desired = {}
+	# child_targets get `read` (line items); link_targets get `select` (pick-only reference).
+	child_targets, link_targets = {}, {}
 	for parent, roles in roles_by_parent.items():
 		if not frappe.db.exists("DocType", parent):
 			continue
 		meta = frappe.get_meta(parent)
-		referenced = {df.options for df in meta.get_table_fields() if df.options}
-		referenced |= {
-			df.options
-			for df in meta.get_link_fields()
-			if df.options and df.options not in _READ_MIRROR_DENYLIST
-		}
-		for ref in referenced:
-			desired.setdefault(ref, set()).update(roles)
+		for df in meta.get_table_fields():
+			if df.options:
+				child_targets.setdefault(df.options, set()).update(roles)
+		for df in meta.get_link_fields():
+			if df.options and df.options not in _READ_MIRROR_DENYLIST:
+				link_targets.setdefault(df.options, set()).update(roles)
+
+	_grant_mirror_read(child_targets)
+	_grant_link_select(link_targets)
+
+
+def _grant_mirror_read(desired):
+	"""Grant `read` on each child-table ref in `desired` to the roles that lack it. One bulk read of
+	the current state first, so a steady-state re-run (after_migrate) does zero writes, stays fast."""
 	if not desired:
 		return
-
-	# Everything already read-granted on those refs, in ONE query — so a steady-state re-run
-	# (after_migrate) does zero writes and stays fast enough to run on every migrate.
 	have = {}
 	for row in frappe.get_all(
 		"Custom DocPerm",
@@ -971,13 +1033,114 @@ def setup_child_table_read_access():
 			continue
 		if not frappe.db.exists("DocType", ref) or frappe.get_meta(ref).issingle:
 			continue
-		# ptypes=("read",) — grant read without disturbing any other permission on the target.
 		_upgrade_role_perms(ref, {role: {"read": 1} for role in missing}, ptypes=("read",))
+
+
+def _grant_link_select(link_targets):
+	"""Grant `select` (pick-only) on each link target to the roles that lack it.
+
+	`add_permission` seeds read=1 on a fresh Custom DocPerm row — the exact over-grant we are
+	removing — so for a role that holds NO authored grant on the target (print=0) we strip that read
+	straight back off, leaving `select` alone. A role that already holds an authored grant (print=1,
+	e.g. Account, or Item/UOM via the mobile sheet) keeps its read; we only add select alongside it."""
+	if not link_targets:
+		return
+	have_select, have_authored = {}, {}
+	for row in frappe.get_all(
+		"Custom DocPerm",
+		filters={"parent": ["in", list(link_targets)], "permlevel": 0},
+		fields=["parent as doctype", "role", "select", "print"],
+	):
+		if row.get("select"):
+			have_select.setdefault(row.doctype, set()).add(row.role)
+		if row.get("print"):
+			have_authored.setdefault(row.doctype, set()).add(row.role)
+
+	for ref, roles in link_targets.items():
+		missing = roles - have_select.get(ref, set())
+		if not missing:
+			continue
+		if not frappe.db.exists("DocType", ref) or frappe.get_meta(ref).issingle:
+			continue
+		_upgrade_role_perms(ref, {role: {"select": 1} for role in missing}, ptypes=("select",))
+		for role in missing - have_authored.get(ref, set()):
+			# pick-only role: drop the read add_permission seeded so this reference is select-only.
+			frappe.db.set_value(
+				"Custom DocPerm",
+				{"parent": ref, "role": role, "permlevel": 0},
+				"read",
+				0,
+				update_modified=False,
+			)
+
+
+# --- Mobile app permissions (additional, layered on the base matrix) -----------
+# A companion mobile app (a separate app) authenticates as BuildSuite users and needs extra
+# DocPerms on top of the base matrix, per the mobile-permissions sheet. Applied with
+# _upgrade_role_perms so it only RAISES perms, never revokes a base grant; each call passes only
+# the ptypes it grants, so unlisted ptypes (e.g. delete) keep their base value.
+_MOBILE_FULL = {"select": 1, "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 1, "print": 1}
+_MOBILE_CRW = {"select": 1, "read": 1, "write": 1, "create": 1, "print": 1}  # Select/Read/Write/Create
+_MOBILE_SR = {"select": 1, "read": 1, "print": 1}  # Select, Read
+
+_M_PM = "BuildSuite PM"
+_M_ENGINEER = "BuildSuite Site Engineer"
+_M_FOREMAN = "BuildSuite Foreman"
+# Roles that may create a Field Attendance muster (from FIELD_ATTENDANCE_ROLE_PERMS).
+_MOBILE_FIELD_ATT_ROLES = (_M_PM, _M_ENGINEER, _M_FOREMAN, "BuildSuite HR Manager")
+# Every BuildSuite persona — an Expense Entry can be raised by all of them (→ Account read), and
+# File is available to all in the mobile app.
+_MOBILE_ALL_ROLES = (
+	"BuildSuite Director",
+	_M_PM,
+	"BuildSuite QS",
+	"BuildSuite Estimator",
+	_M_ENGINEER,
+	_M_FOREMAN,
+	"BuildSuite Procurement Officer",
+	"BuildSuite Store Keeper",
+	"BuildSuite Accountant",
+	"BuildSuite HR Manager",
+)
+
+
+def _mobile_perm(roles, perm):
+	return {role: perm for role in roles}
+
+
+def setup_mobile_permissions():
+	"""Extra DocPerms for the companion mobile app, layered on the base matrix (never revokes).
+	Source: the mobile-permissions sheet — Select/Read/Write/Create/Submit/Cancel per doctype."""
+	full, crw, sr = tuple(_MOBILE_FULL), tuple(_MOBILE_CRW), tuple(_MOBILE_SR)
+	eng_fore = (_M_ENGINEER, _M_FOREMAN)
+	eng_fore_pm = (_M_ENGINEER, _M_FOREMAN, _M_PM)
+
+	# Account — anyone who can raise an expense reads/selects accounts in the mobile form.
+	_upgrade_role_perms("Account", _mobile_perm(_MOBILE_ALL_ROLES, _MOBILE_SR), sr)
+	# Material Request + Stock Entry — Site Engineer + Foreman, full lifecycle.
+	_upgrade_role_perms("Material Request", _mobile_perm(eng_fore, _MOBILE_FULL), full)
+	_upgrade_role_perms("Stock Entry", _mobile_perm(eng_fore, _MOBILE_FULL), full)
+	# Field Attendance muster — field-attendance creators get the full lifecycle. The Labour /
+	# Overtime Attendance Registers are DERIVED (generated when the muster is submitted; "no role
+	# edits directly" per DERIVED_ATTENDANCE_ROLE_PERMS), so mobile only reads them — they keep the
+	# base matrix's read-only grant, never write/create/submit here.
+	_upgrade_role_perms("Field Attendance", _mobile_perm(_MOBILE_FIELD_ATT_ROLES, _MOBILE_FULL), full)
+	# File — every persona (attach field photos / receipts).
+	_upgrade_role_perms("File", _mobile_perm(_MOBILE_ALL_ROLES, _MOBILE_CRW), crw)
+	# Journal Entry + Item — Site Engineer + Foreman, read/select only.
+	_upgrade_role_perms("Journal Entry", _mobile_perm(eng_fore, _MOBILE_SR), sr)
+	_upgrade_role_perms("Item", _mobile_perm(eng_fore, _MOBILE_SR), sr)
+	# Task Progress Entry — Site Engineer + Foreman + PM, create/edit.
+	_upgrade_role_perms("Task Progress Entry", _mobile_perm(eng_fore_pm, _MOBILE_CRW), crw)
+	# Purchase Receipt — Site Engineer + Foreman + PM, full lifecycle.
+	_upgrade_role_perms("Purchase Receipt", _mobile_perm(eng_fore_pm, _MOBILE_FULL), full)
+	# UOM — Site Engineer + Foreman + PM, read/select.
+	_upgrade_role_perms("UOM", _mobile_perm(eng_fore_pm, _MOBILE_SR), sr)
 
 
 def setup_record_permissions():
 	"""Seed roles + DocPerms for every BuildSuite-scoped doctype."""
-	from buildsuite_core.buildsuite_core.doctype.persona.seed_personas import seed_personas
+	from buildsuite_core.buildsuite_core.doctype.persona.seed_personas import repair_default_personas
 	from buildsuite_core.buildsuite_core.doctype.workspace_setting.seed_workspace_reports import (
 		seed_workspace_reports,
 	)
@@ -998,13 +1161,17 @@ def setup_record_permissions():
 	setup_workforce_permissions()
 	setup_equipment_permissions()
 	setup_project_finance_permissions()
+	setup_mobile_permissions()  # extra DocPerms for the companion mobile app (layered)
 	_ensure_role(WORKFLOW_EDITOR_ROLE)
 	setup_stage_planning_workflow()
 	setup_subcontractor_wo_workflow()
 	# Mirror read to child tables of everything the BuildSuite roles can read (must run AFTER
 	# all the parent grants above are in place).
 	setup_child_table_read_access()
-	# Personas map to the roles ensured above — seed them once the roles exist.
-	seed_personas()
+	# Personas map to the roles ensured above. Use repair (not plain seed) so an existing
+	# persona that was created empty — the persona-creation patches run BEFORE the roles
+	# exist, and plain seed_personas skips already-created personas — gets its missing
+	# default roles backfilled now that the roles are in place.
+	repair_default_personas()
 	# Per-workspace report tiles (Query Reports + the Workspace Setting table).
 	seed_workspace_reports()

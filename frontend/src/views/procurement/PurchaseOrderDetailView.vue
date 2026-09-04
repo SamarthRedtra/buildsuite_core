@@ -16,11 +16,13 @@ import {
 import DeskPage from "@/components/desk/DeskPage.vue";
 import DeskLink from "@/components/desk/DeskLink.vue";
 import ProcurementStatusPill from "@/components/procurement/ProcurementStatusPill.vue";
+import { usePermissions } from "@/composables/usePermissions";
 import { fmtDate, fmtINR } from "@/utils/format";
 
 const props = defineProps({ id: String });
 const router = useRouter();
 const confirmDialog = useConfirm();
+const { canEdit, canSubmit, canCreate, canDelete } = usePermissions();
 
 const po = ref(null);
 const loading = ref(true);
@@ -45,6 +47,11 @@ const canReceive = computed(() => isSubmitted.value && (po.value?.per_received |
 
 function onEdit() {
 	router.push(`/procurement/purchase-orders/${po.value.name}/edit`);
+}
+function onPrint() {
+	// In-app print view (mirrors the Work Order workflow) — no new tab. The Vue
+	// page is the visual twin of the seeded Frappe "Purchase Order" Print Format.
+	router.push(`/procurement/purchase-orders/${po.value.name}/print`);
 }
 function onCreateReceipt() {
 	router.push(`/procurement/receipts/new?po=${po.value.name}`);
@@ -134,7 +141,24 @@ const breadcrumbs = computed(() => [
 		<template #actions>
 			<ProcurementStatusPill :status="po.status" class="self-center mr-1" />
 			<button
-				v-if="isDraft"
+				type="button"
+				class="text-xs px-2.5 py-1 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700 flex items-center gap-1.5"
+				style="border-radius: 6px"
+				title="Open the printable purchase order (Save as PDF from the print dialog)"
+				@click="onPrint"
+			>
+				<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="1.75"
+						d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+					/>
+				</svg>
+				Print / PDF
+			</button>
+			<button
+				v-if="isDraft && canEdit('purchaseOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700"
 				style="border-radius: 6px"
@@ -143,7 +167,7 @@ const breadcrumbs = computed(() => [
 				Edit
 			</button>
 			<button
-				v-if="isDraft"
+				v-if="isDraft && canSubmit('purchaseOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-brand-300 bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium"
 				style="border-radius: 6px"
@@ -153,7 +177,7 @@ const breadcrumbs = computed(() => [
 				Submit
 			</button>
 			<button
-				v-if="canReceive"
+				v-if="canReceive && canCreate('purchaseReceipt')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-brand-300 bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium"
 				style="border-radius: 6px"
@@ -163,7 +187,7 @@ const breadcrumbs = computed(() => [
 				+ Create Receipt
 			</button>
 			<button
-				v-if="isSubmitted"
+				v-if="isSubmitted && canSubmit('purchaseOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-warning-300 bg-warning-50 hover:bg-warning-100 text-warning-700 font-medium"
 				style="border-radius: 6px"
@@ -173,7 +197,7 @@ const breadcrumbs = computed(() => [
 				Cancel
 			</button>
 			<button
-				v-if="isCancelled"
+				v-if="isCancelled && canCreate('purchaseOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-brand-300 bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium"
 				style="border-radius: 6px"
@@ -184,7 +208,7 @@ const breadcrumbs = computed(() => [
 				Amend
 			</button>
 			<button
-				v-if="!isSubmitted"
+				v-if="!isSubmitted && canDelete('purchaseOrder')"
 				type="button"
 				class="text-xs px-2.5 py-1 border border-danger-200 bg-white hover:bg-danger-50 text-danger-700"
 				style="border-radius: 6px"
