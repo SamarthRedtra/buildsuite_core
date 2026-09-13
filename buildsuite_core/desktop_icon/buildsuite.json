@@ -5,7 +5,7 @@
  "docstatus": 0,
  "doctype": "Desktop Icon",
  "hidden": 0,
- "icon_type": "Link",
+ "icon_type": "App",
  "idx": 0,
  "label": "Redtra Suite",
  "link": "/core",
@@ -16,9 +16,9 @@
  "modified_by": "Administrator",
  "name": "BuildSuite",
  "owner": "Administrator",
- "parent_icon": "ERPNext",
+ "parent_icon": null,
  "restrict_removal": 0,
  "roles": [],
- "sidebar": "BuildSuite",
+ "sidebar": null,
  "standard": 1
 }

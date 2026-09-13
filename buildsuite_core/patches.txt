@@ -44,3 +44,4 @@ buildsuite_core.patches.drop_manager_employee_user_permissions # 2026-09-04 rost
 buildsuite_core.patches.migrate_subcontract_advance_to_percentage # 2026-09-08 native PI recovery
 buildsuite_core.patches.retire_boq_bill_accounting_dimension # 2026-09-13 legacy retirement cleanup
 buildsuite_core.patches.rename_redtra_suite_brand_labels # 2026-09-14 display-brand rename
+buildsuite_core.patches.promote_redtra_suite_desktop_icon # 2026-09-14 top-level app launcher icon
