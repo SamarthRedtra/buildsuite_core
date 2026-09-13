@@ -14,6 +14,8 @@ describe("Real company and global search", () => {
 	});
 
 	it("shows the active ERPNext company without ACME choices", () => {
+		cy.contains("Redtra Suite").should("be.visible");
+		cy.get("body").should("not.contain", "BuildSuite Core");
 		cy.get('[data-testid="active-company-badge"]')
 			.should("contain", "Deltachem Middle East LLC")
 			.and("not.contain", "ACME");

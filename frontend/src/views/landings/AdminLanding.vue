@@ -123,7 +123,7 @@ const systemHealth = [
 			<!-- Workspace launcher -->
 			<section class="mt-10">
 				<div class="flex items-baseline justify-between mb-3">
-					<h2 class="text-sm font-semibold text-ink-900">BuildSuite Core</h2>
+					<h2 class="text-sm font-semibold text-ink-900">Redtra Suite</h2>
 					<span class="text-[11px] text-ink-500"
 						>{{ buildsuiteTiles.length }} workspace{{
 							buildsuiteTiles.length === 1 ? "" : "s"

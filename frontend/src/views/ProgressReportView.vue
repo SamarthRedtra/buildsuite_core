@@ -84,7 +84,7 @@ const periodLabel = computed(
 
 // Company monogram — up to two words, so "Acme Commercial Pvt Ltd" reads AC.
 const companyMonogram = computed(() => {
-	const name = company.value.name || "BuildSuite";
+	const name = company.value.name || "Redtra Suite";
 	return name
 		.split(/\s+/)
 		.filter((w) => !/^(pvt|private|ltd|limited|llp|inc|co|and|&)$/i.test(w))

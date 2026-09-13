@@ -135,7 +135,7 @@ function cancel() {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Task", to: "/tasks" },
 	{ label: "New" },
 ];

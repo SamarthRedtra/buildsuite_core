@@ -120,7 +120,7 @@ const saving = ref(false);
 // Subprojects inherit the parent's company, so the field is hidden for them and
 // the value isn't sent. Company is locked after create. Uses a BuildSuite helper
 // rather than get_value on the Global Defaults Single (which 403s for non-admins).
-// Project naming mode (from BuildSuite Core Settings). When it's "Name Series", the
+// Project naming mode (from Redtra Suite Settings). When it's "Name Series", the
 // New Project form shows a naming-series select (default series pre-selected) and the
 // project's record ID comes from that series instead of the entered Project ID.
 const namingMode = ref("Project ID");
@@ -309,7 +309,7 @@ const subtitle = computed(() =>
 
 const breadcrumbs = computed(() => {
 	const out = [
-		{ label: "BuildSuite Core", to: "/" },
+		{ label: "Redtra Suite", to: "/" },
 		{ label: "Project", to: "/projects" },
 	];
 	if (parentProject.value)

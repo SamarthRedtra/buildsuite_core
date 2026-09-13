@@ -205,7 +205,7 @@ async function onDelete() {
 }
 
 const breadcrumbs = computed(() => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Scope Change Orders", to: "/sco" },
 	{ label: sco.value?.name || props.id },
 ]);

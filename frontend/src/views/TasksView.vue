@@ -91,7 +91,7 @@ const filterValues = computed(() => ({
 	taskType: taskTypeFilter.value,
 }));
 
-const breadcrumbs = [{ label: "BuildSuite Core", to: "/" }, { label: "Task" }];
+const breadcrumbs = [{ label: "Redtra Suite", to: "/" }, { label: "Task" }];
 
 function onRowClick(row) {
 	router.push(`/tasks/${row.name}`);

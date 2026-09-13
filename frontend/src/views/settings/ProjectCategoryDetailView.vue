@@ -86,7 +86,7 @@ function cancel() {
 }
 
 const breadcrumbs = computed(() => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Settings", to: "/settings" },
 	{ label: "Project Categories", to: "/settings/project-categories" },
 	{ label: props.id },

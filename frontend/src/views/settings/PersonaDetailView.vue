@@ -102,7 +102,7 @@ async function remove() {
 }
 
 const breadcrumbs = () => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Settings", to: "/settings" },
 	{ label: "Personas", to: "/settings/personas" },
 	{ label: props.id },
@@ -190,7 +190,7 @@ onMounted(() => {
 				<DeskSection title="Danger zone" :cols="1">
 					<div class="flex items-center justify-between gap-3 flex-wrap">
 						<p class="text-xs text-ink-500">
-							<span v-if="isDefault">This is a BuildSuite default persona. </span
+							<span v-if="isDefault">This is a Redtra Suite default persona. </span
 							>Deleting a persona is permanent and only allowed when no user is
 							assigned it.
 						</p>

@@ -1048,7 +1048,7 @@ watch(() => route.hash, applyHashTab, { immediate: true });
 
 const breadcrumbs = computed(() => {
 	const out = [
-		{ label: "BuildSuite Core", to: "/" },
+		{ label: "Redtra Suite", to: "/" },
 		{ label: "Project", to: "/projects" },
 	];
 	if (parent.value) out.push({ label: parent.value.name, to: `/projects/${parent.value.id}` });

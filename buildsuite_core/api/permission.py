@@ -22,9 +22,9 @@ def _has_app_permission(log_denial: bool = True) -> bool:
 
 	if log_denial:
 		frappe.log_error(
-			title="BuildSuite Core access denied",
+			title="Redtra Suite access denied",
 			message=_(
-				"User {0} attempted to access BuildSuite Core without an allowed role.",
+				"User {0} attempted to access Redtra Suite without an allowed role.",
 				[frappe.session.user],
 			),
 		)

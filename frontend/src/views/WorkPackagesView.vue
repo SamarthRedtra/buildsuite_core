@@ -68,7 +68,7 @@ function progressBarColor(row) {
 	return "bg-success-500";
 }
 
-const breadcrumbs = [{ label: "BuildSuite Core", to: "/" }, { label: "Work Package" }];
+const breadcrumbs = [{ label: "Redtra Suite", to: "/" }, { label: "Work Package" }];
 
 function onRowClick(row) {
 	router.push(`/work-packages/${row.name}`);

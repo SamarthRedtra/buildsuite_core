@@ -295,7 +295,7 @@ async function onUndisburse(row) {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Project Finance", to: "/project-finance" },
 	{ label: "Petty Cash" },
 ];

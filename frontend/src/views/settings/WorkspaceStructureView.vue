@@ -121,7 +121,7 @@ function toggleRole(target, roleId) {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Settings", to: "/settings" },
 	{ label: "Workspace Structure" },
 ];
@@ -161,7 +161,7 @@ const totalShortcuts = computed(() =>
 					v-else
 					class="px-3 py-2 bg-warning-50 border-b border-warning-100 text-xs text-warning-700"
 				>
-					Read-only. Editing requires the BuildSuite Administrator role.
+					Read-only. Editing requires Redtra Suite administrator access.
 				</div>
 			</template>
 

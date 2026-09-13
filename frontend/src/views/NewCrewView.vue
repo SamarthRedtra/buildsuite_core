@@ -66,7 +66,7 @@ async function onSave() {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Workforce", to: "/workforce" },
 	{ label: "Crews", to: "/crews" },
 	{ label: "New" },

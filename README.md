@@ -1,16 +1,16 @@
 <div align="center">
 
-![BuildSuite Core](docs/images/bs-core-readme-banner.png)
+![Redtra Suite](docs/images/bs-core-readme-banner.png)
 
-# BuildSuite Core
+# Redtra Suite
 
 **Construction operations for Frappe/ERPNext v16 — open source, MIT licensed.**
 
 </div>
 
-BuildSuite Core adds the things a contractor actually runs on top of ERPNext: a project spine with work packages and stage plans, estimation with a rate library, subcontract measurement and billing, site labour attendance, plant logging, and the money surfaces that tie them together.
+Redtra Suite adds the things a contractor actually runs on top of ERPNext: a project spine with work packages and stage plans, estimation with a rate library, subcontract measurement and billing, site labour attendance, plant logging, and the money surfaces that tie them together.
 
-It is built on the principle that construction software should not re-implement accounting. **BuildSuite owns the documents that capture construction reality; ERPNext owns the ledger.**
+It is built on the principle that construction software should not re-implement accounting. **Redtra Suite owns the documents that capture construction reality; ERPNext owns the ledger.**
 
 > **Beta.** All planned modules are shipped and installable. Interfaces are stable enough to build against, but this is a beta — expect rough edges, and please report them.
 
@@ -47,7 +47,7 @@ It is built on the principle that construction software should not re-implement 
 
 These are the decisions that shape the codebase. They're worth reading before contributing.
 
-- **Thin instrument over canonical document.** BuildSuite documents capture construction reality — free-text subcontract lines, site measurement, daily musters. On submit they generate the standard ERPNext document that does the accounting. A subcontractor bill generates a Purchase Invoice; a petty cash disbursement generates a Payment Entry; an expense generates a Journal Entry. We never re-implement the ledger, which is why a customer can grow from the Vue app into full Desk accounting with no migration.
+- **Thin instrument over canonical document.** Redtra Suite documents capture construction reality — free-text subcontract lines, site measurement, daily musters. On submit they generate the standard ERPNext document that does the accounting. A subcontractor bill generates a Purchase Invoice; a petty cash disbursement generates a Payment Entry; an expense generates a Journal Entry. We never re-implement the ledger, which is why a customer can grow from the Vue app into full Desk accounting with no migration.
 - **Cost codes, not per-item tracking.** Every cost-bearing line carries a cost code — either a BOQ group or a BOQ item. Costs roll up, never down. `cost_type` is derived from the document and the code, never stored on a transaction line, so it cannot drift.
 - **HR-free core.** The Workforce module installs and runs on a site with no `hrms` present. It owns its own worker identity, crew and worker-type model, and does not link to Employee or Employment Type.
 - **Company is asked once.** A user picks a company on the project. Every document below derives it, hidden and read-only. Single-company customers never meet the field; multi-company customers get record-level scoping through Frappe's own user permissions. Shared masters — rate master, task types — carry no company at all.
@@ -60,7 +60,7 @@ These are the decisions that shape the codebase. They're worth reading before co
 - ERPNext v16
 - MariaDB 10.6+, Redis, Node 18+, Python 3.11+ (per Frappe v16's own requirements)
 
-For Indian GST, install [India Compliance](https://github.com/resilient-tech/india-compliance) alongside. BuildSuite generates standard Purchase Invoices, so they reconcile against GSTR-2B in the normal way.
+For Indian GST, install [India Compliance](https://github.com/resilient-tech/india-compliance) alongside. Redtra Suite generates standard Purchase Invoices, so they reconcile against GSTR-2B in the normal way.
 
 ## Installation
 

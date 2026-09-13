@@ -1104,7 +1104,7 @@ const subtitle = computed(() => (boq.value ? `${boq.value.id} · R${boq.value.re
 
 const breadcrumbs = computed(() => {
 	const out = [
-		{ label: "BuildSuite Core", to: "/" },
+		{ label: "Redtra Suite", to: "/" },
 		{ label: "BOQ", to: "/boq" },
 	];
 	if (project.value)

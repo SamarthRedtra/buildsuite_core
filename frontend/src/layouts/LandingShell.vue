@@ -24,7 +24,7 @@ const skipLink = computed(() => {
 		>
 			<RouterLink to="/" class="flex items-center gap-2.5">
 				<LogoIcon :size="28" />
-				<span class="font-semibold text-ink-900">BuildSuite</span>
+				<span class="font-semibold text-ink-900">Redtra Suite</span>
 				<span
 					class="ml-2 text-[10px] px-1.5 py-0.5 bg-ink-100 text-ink-600 rounded font-medium tracking-wide"
 					>PROTOTYPE</span
@@ -47,7 +47,7 @@ const skipLink = computed(() => {
 		</main>
 
 		<footer class="border-t border-ink-200 bg-white py-4 text-center text-[11px] text-ink-400">
-			BuildSuite Core · Open Source MIT · Frappe v16 prototype · Browser storage backend
+			Redtra Suite · Open Source MIT · Frappe v16 prototype · Browser storage backend
 		</footer>
 	</div>
 </template>

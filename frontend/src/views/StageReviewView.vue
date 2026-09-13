@@ -311,7 +311,7 @@ function goBack() {
 	<div v-if="stage" class="px-6 py-6 max-w-6xl mx-auto">
 		<!-- Breadcrumb -->
 		<nav class="text-xs text-ink-500 mb-3 flex items-center gap-1.5 flex-wrap">
-			<RouterLink to="/" class="hover:text-ink-700">BuildSuite Core</RouterLink>
+			<RouterLink to="/" class="hover:text-ink-700">Redtra Suite</RouterLink>
 			<span>›</span>
 			<RouterLink to="/stage-plannings" class="hover:text-ink-700"
 				>Stage Planning</RouterLink

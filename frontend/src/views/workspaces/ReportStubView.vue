@@ -81,7 +81,7 @@ const slug = computed(() => route.params.slug);
 const report = computed(() => REPORTS[slug.value] || null);
 
 const breadcrumbs = computed(() => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Site Execution", to: "/site-execution" },
 	{ label: "Reports" },
 	{ label: report.value?.title || "Unknown report" },

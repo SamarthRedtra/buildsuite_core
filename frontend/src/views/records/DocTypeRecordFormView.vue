@@ -14,7 +14,7 @@ const props = defineProps({
 const isEdit = computed(() => !!props.name);
 const title = computed(() => (isEdit.value ? props.name : `New ${props.doctype}`));
 const breadcrumbs = computed(() => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: props.doctype, to: `/records/${encodeURIComponent(props.doctype)}` },
 	{ label: isEdit.value ? props.name : "New" },
 ]);

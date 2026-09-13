@@ -14,7 +14,7 @@ import { getWorkspaceIconPath } from "@/utils/workspaceIcons";
 const store = useDataStore();
 const router = useRouter();
 
-const breadcrumbs = [{ label: "BuildSuite Core", to: "/" }, { label: "Settings" }];
+const breadcrumbs = [{ label: "Redtra Suite", to: "/" }, { label: "Settings" }];
 
 const isAdmin = computed(() => store.isAdmin);
 const isBSA = computed(() => store.isBSA);
@@ -77,13 +77,13 @@ const groups = computed(() => [
 		],
 	},
 	{
-		title: "BuildSuite product settings",
+		title: "Redtra Suite product settings",
 		tiles: [
 			{
 				slug: "core",
 				icon: "puzzle",
-				label: "BuildSuite Core Settings",
-				desc: "Org-wide BuildSuite toggles — company segregation, default project type, default company.",
+				label: "Redtra Suite Settings",
+				desc: "Org-wide Redtra Suite toggles — company segregation, default project type, default company.",
 				to: "/settings/core",
 				adminOnly: true,
 			},

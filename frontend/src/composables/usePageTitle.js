@@ -4,7 +4,7 @@ import { APP_TITLE } from "@/utils/appRoute";
 /**
  * Reactively set the browser/document title to a page-specific value, e.g. the
  * name of the record on a detail page. Pass a ref, a getter, or a string of the
- * specific part — it's suffixed with the app name ("<value> · BuildSuite Core").
+ * specific part — it's suffixed with the app name ("<value> · Redtra Suite").
  *
  * The router's afterEach already sets a sensible per-route title; call this from a
  * view's setup to override it with something more specific once the record loads.

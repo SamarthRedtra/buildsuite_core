@@ -1,5 +1,5 @@
 <script setup>
-// Accounting workspace — inherited from ERPNext V16, with BuildSuite Core customizations
+// Accounting workspace — inherited from ERPNext V16, with Redtra Suite customizations
 // per CLAUDE.md §12.2 / §12.6. This is the first authentic workspace landing (Phase 4),
 // distinct from PlaceholderView's simple shortcut-tile pattern. Other ERPNext workspaces
 // (Buying / Stock / Assets / HR) can copy this file's shape when they get populated.
@@ -14,7 +14,7 @@
 import DeskPage from "@/components/desk/DeskPage.vue";
 import WorkspaceShortcut from "@/components/WorkspaceShortcut.vue";
 
-const breadcrumbs = [{ label: "BuildSuite Core", to: "/" }, { label: "Accounting" }];
+const breadcrumbs = [{ label: "Redtra Suite", to: "/" }, { label: "Accounting" }];
 
 // Number Cards: ERPNext-standard KPI tiles at the top of the workspace. All values
 // illustrative — no accounting data exists in seed (M8 Project Finance handles petty
@@ -27,7 +27,7 @@ const numberCards = [
 ];
 
 // Shortcuts: large primary-action tiles. ERPNext picks the 5–6 most frequent docs.
-// `bs: true` marks the ones BuildSuite Core extends with custom fields (§12.6).
+// `bs: true` marks the ones Redtra Suite extends with custom fields (§12.6).
 const shortcuts = [
 	{ label: "Sales Invoice", icon: "📄", to: "#" },
 	{ label: "Purchase Invoice", icon: "📥", to: "#" },

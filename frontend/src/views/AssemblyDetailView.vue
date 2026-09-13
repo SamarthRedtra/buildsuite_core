@@ -34,7 +34,7 @@ const resource = adapter.read("Assembly", props.id, { fields: ["*"] });
 const doc = computed(() => resource?.doc || null);
 
 const breadcrumbs = computed(() => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Estimation", to: "/estimation" },
 	{ label: "Assembly", to: "/assembly" },
 	{ label: doc.value?.assembly_name || props.id },

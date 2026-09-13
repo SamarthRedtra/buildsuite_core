@@ -43,7 +43,7 @@ function companyName(id) {
 	return companiesResource.data?.find((c) => c.id === id)?.name || id;
 }
 
-const breadcrumbs = [{ label: "BuildSuite Core", to: "/" }, { label: "Project" }];
+const breadcrumbs = [{ label: "Redtra Suite", to: "/" }, { label: "Project" }];
 
 function onRowClick(row) {
 	const key = row.name;

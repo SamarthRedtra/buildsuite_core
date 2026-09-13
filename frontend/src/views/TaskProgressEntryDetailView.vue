@@ -452,7 +452,7 @@ const deleteMessage = computed(() =>
 
 const breadcrumbs = computed(() => {
 	const out = [
-		{ label: "BuildSuite Core", to: "/" },
+		{ label: "Redtra Suite", to: "/" },
 		{ label: "Task Progress Entry", to: "/progress-entries" },
 	];
 	if (task.value) out.push({ label: task.value.name, to: `/tasks/${task.value.id}` });

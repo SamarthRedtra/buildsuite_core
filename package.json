@@ -1,7 +1,7 @@
 {
   "name": "buildsuite_core",
   "version": "0.0.1",
-  "description": "BuildSuite Core",
+  "description": "Redtra Suite",
   "type": "module",
   "private": true,
   "scripts": {

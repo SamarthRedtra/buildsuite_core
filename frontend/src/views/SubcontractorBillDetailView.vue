@@ -547,7 +547,7 @@ function formatFileSize(bytes) {
 }
 
 const breadcrumbs = computed(() => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Subcontract", to: "/subcontract" },
 	{ label: "Subcontractor Bills", to: "/subcontractor-bills" },
 	{ label: bill.value?.name || props.id },

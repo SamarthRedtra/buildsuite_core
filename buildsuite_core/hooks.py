@@ -1,5 +1,5 @@
 app_name = "buildsuite_core"
-app_title = "BuildSuite Core"
+app_title = "Redtra Suite"
 app_publisher = "Infraholic Innovations Pvt. Ltd"
 app_description = "A construction operating system built on Frappe"
 app_email = "app@buildsuite.io"
@@ -21,7 +21,7 @@ required_apps = ["erpnext"]
 # 	{
 # 		"name": "buildsuite_core",
 # 		"logo": "/assets/buildsuite_core/images/bs-icon.svg",
-# 		"title": "BuildSuite Core",
+# 		"title": "Redtra Suite",
 # 		"route": f"/{APP_ROUTE}",
 #         "has_permission": "buildsuite_core.api.permission.has_app_permission",
 # 	}

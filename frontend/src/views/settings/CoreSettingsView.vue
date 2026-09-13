@@ -1,5 +1,5 @@
 <script setup>
-// BuildSuite Core Settings — Single DocType. Org-wide BuildSuite-product
+// Redtra Suite Settings — Single DocType. Org-wide BuildSuite-product
 // toggles. Session 34, M1 scope. Admin or BSA gated.
 //
 // Production shape: Frappe Single DocType (one record per site). Prototype
@@ -25,7 +25,7 @@ const editing = ref(false);
 const form = ref({});
 const saving = ref(false);
 
-// Project naming MODE is server-persisted (BuildSuite Core Settings Single). It's
+// Project naming MODE is server-persisted (Redtra Suite Settings Single). It's
 // just the mode here ("Project ID" | "Name Series"); the specific series, when Name
 // Series, is chosen per-project on the New Project form.
 const PROJECT_ID_MODE = "Project ID";
@@ -33,7 +33,7 @@ const projectNaming = ref(PROJECT_ID_MODE);
 const namingModes = ref([PROJECT_ID_MODE, "Name Series"]);
 
 // Petty Cash Account — the configurable Cash/Bank float that petty cash and expenses post
-// to/from (server-persisted on BuildSuite Core Settings). Loaded like project naming.
+// to/from (server-persisted on Redtra Suite Settings). Loaded like project naming.
 const pettyCashAccount = ref("");
 const pettyCashOptions = ref([]);
 
@@ -94,9 +94,9 @@ function onPrimary() {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Settings", to: "/settings" },
-	{ label: "BuildSuite Core Settings" },
+	{ label: "Redtra Suite Settings" },
 ];
 
 const PROJECT_TYPES = ["Commercial", "Residential", "Infrastructure", "Industrial", "Renovation"];
@@ -104,8 +104,8 @@ const PROJECT_TYPES = ["Commercial", "Residential", "Infrastructure", "Industria
 
 <template>
 	<DeskPage
-		title="BuildSuite Core Settings"
-		subtitle="Org-wide BuildSuite toggles"
+		title="Redtra Suite Settings"
+		subtitle="Org-wide Redtra Suite toggles"
 		:breadcrumbs="breadcrumbs"
 	>
 		<DeskForm>
@@ -123,7 +123,7 @@ const PROJECT_TYPES = ["Commercial", "Residential", "Infrastructure", "Industria
 					v-else
 					class="px-3 py-2 bg-warning-50 border-b border-warning-100 text-xs text-warning-700"
 				>
-					Read-only. Editing requires Admin or BuildSuite Administrator role.
+					Read-only. Editing requires Redtra Suite administrator access.
 				</div>
 			</template>
 

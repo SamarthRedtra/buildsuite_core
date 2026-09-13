@@ -24,7 +24,7 @@ const tiles = computed(() => {
 	const out = [
 		{
 			key: "buildsuite-app",
-			label: "BuildSuite",
+			label: "Redtra Suite",
 			to: "/home",
 			style: TILE_STYLE.brand,
 			isLogo: true,

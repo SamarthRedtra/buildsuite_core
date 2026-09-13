@@ -14,7 +14,7 @@ const backTo = computed(() => route.query.from || "");
 const backLabel = computed(() => route.query.fromLabel || "Reports");
 
 const breadcrumbs = computed(() => {
-	const crumbs = [{ label: "BuildSuite Core", to: "/" }];
+	const crumbs = [{ label: "Redtra Suite", to: "/" }];
 	if (backTo.value) crumbs.push({ label: backLabel.value, to: backTo.value });
 	crumbs.push({ label: report.value });
 	return crumbs;

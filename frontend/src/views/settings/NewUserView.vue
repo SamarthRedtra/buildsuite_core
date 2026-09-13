@@ -49,7 +49,7 @@ onMounted(() => {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Settings", to: "/settings" },
 	{ label: "Users", to: "/settings/users" },
 	{ label: "New User" },
@@ -213,7 +213,7 @@ async function save() {
 									Send welcome email
 								</div>
 								<div class="text-[11px] text-ink-500">
-									Brief intro to BuildSuite Core, link to set up their profile.
+									Brief intro to Redtra Suite, link to set up their profile.
 								</div>
 							</div>
 						</label>

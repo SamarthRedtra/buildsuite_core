@@ -197,7 +197,7 @@ function cancel() {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Stage Planning", to: "/stage-plannings" },
 	{ label: "New" },
 ];

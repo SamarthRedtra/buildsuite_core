@@ -1,4 +1,4 @@
-// User accounts BuildSuite Core's own UI must never surface — its user lists, team
+// User accounts Redtra Suite's own UI must never surface — its user lists, team
 // pickers, assignee dropdowns and mention/autocomplete. That's the built-in system
 // accounts (Administrator, Guest) plus platform admins (System Manager holders that
 // aren't BuildSuite users). Fetched once from the backend and cached module-wide,

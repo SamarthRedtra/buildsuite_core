@@ -1070,7 +1070,7 @@ export const seedData = {
 
 	// ===== Settings DocTypes (Session 34 — new for M1) =====
 	// Three Single DocTypes that ship in M1 per the Block-B decisions:
-	// - BuildSuite Core Settings: org-wide toggles
+	// - Redtra Suite Settings: org-wide toggles
 	// - Site Execution Settings: module operational defaults
 	// - Workspace Structure Settings: BSA-driven workspace + shortcut config
 	//   (drives the Site Execution landing's shortcut grid — replaces the

@@ -66,7 +66,7 @@ function selectOptions(f) {
 }
 
 const breadcrumbs = computed(() => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: config.value?.label || props.doctype },
 ]);
 

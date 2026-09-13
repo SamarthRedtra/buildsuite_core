@@ -14,7 +14,7 @@ function onRowClick(row) {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Estimation", to: "/estimation" },
 	{ label: "Estimate Template" },
 ];

@@ -62,7 +62,7 @@ const columns = [
 	{ key: "raised_date", label: "Date" },
 ];
 
-const breadcrumbs = [{ label: "BuildSuite Core", to: "/" }, { label: "Scope Change Orders" }];
+const breadcrumbs = [{ label: "Redtra Suite", to: "/" }, { label: "Scope Change Orders" }];
 
 function onRowClick(row) {
 	router.push(`/sco/${row.name}`);

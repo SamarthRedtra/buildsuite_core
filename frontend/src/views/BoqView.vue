@@ -169,7 +169,7 @@ const columns = [
 	{ key: "variance", label: "Variance", align: "right" },
 ];
 
-const breadcrumbs = [{ label: "BuildSuite Core", to: "/" }, { label: "BOQ" }];
+const breadcrumbs = [{ label: "Redtra Suite", to: "/" }, { label: "BOQ" }];
 const subtitle = computed(
 	() => `${rows.value.length} of ${(boqRes.data || []).length} · estimation`
 );

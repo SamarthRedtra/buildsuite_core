@@ -281,7 +281,7 @@ const counts = computed(() =>
 );
 
 const breadcrumbs = computed(() => [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Procurement", to: "/procurement" },
 	{ label: meta.value?.title || "Reports" },
 ]);

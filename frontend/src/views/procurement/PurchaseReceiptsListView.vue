@@ -66,7 +66,7 @@ function openNew() {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Procurement", to: "/procurement" },
 	{ label: "Purchase Receipts" },
 ];

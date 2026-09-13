@@ -1,6 +1,6 @@
 // Role system — the 12 standard BuildSuite roles, the workspace visibility matrix,
 // and per-role sidebar ordering. The visibility + order below are transcribed from the
-// "BuildSuite Core - persona landing, module and workspace access" sheet (Workspaces tab):
+// "Redtra Suite - persona landing, module and workspace access" sheet (Workspaces tab):
 // each persona's access level and sidebar order per workspace. This drives the Vue app's
 // sidebar only; backend role permissions (permissions/*.py) and the Desk /app workspace
 // `roles` fields are enforced/configured separately.
@@ -101,10 +101,10 @@ export const ROLES = [
 	},
 	{
 		id: "bsa",
-		name: "BuildSuite Administrator",
-		shortName: "BS Admin",
+		name: "Redtra Suite Administrator",
+		shortName: "RS Admin",
 		description:
-			'BuildSuite-product admin — Workspace Structure, Site Execution Settings, Project Type templates, Pro license. The "BuildSuite owner" at a customer org.',
+			'Redtra Suite product admin — Workspace Structure, Site Execution Settings, Project Type templates, Pro license. The "Redtra Suite owner" at a customer org.',
 		color: "bg-brand-700",
 	},
 ];

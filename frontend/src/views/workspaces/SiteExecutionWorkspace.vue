@@ -180,7 +180,7 @@ onMounted(async () => {
 					Open Workspace Structure Settings →
 				</RouterLink>
 				<div v-else class="text-[11px] text-ink-400 italic">
-					Contact your BuildSuite Administrator to enable.
+					Contact your Redtra Suite administrator to enable.
 				</div>
 			</div>
 

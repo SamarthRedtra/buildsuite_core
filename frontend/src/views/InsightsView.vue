@@ -762,7 +762,7 @@ const VIZ_LABEL = { bar: "Bar", column: "Column", line: "Line", donut: "Donut", 
 			</section>
 
 			<p v-if="!spec" class="text-[11px] text-ink-400 mt-6">
-				Prompts are matched against BuildSuite's own data — every figure here comes from your records, and a question it can't map says so rather than guessing.
+				Prompts are matched against Redtra Suite's own data — every figure here comes from your records, and a question it can't map says so rather than guessing.
 			</p>
 		</div>
 	</div>

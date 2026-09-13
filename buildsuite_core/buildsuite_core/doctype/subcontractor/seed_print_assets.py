@@ -8,7 +8,7 @@ identity (number, date, status) lives in the print-format body. Idempotent."""
 
 import frappe
 
-LETTER_HEAD = "BuildSuite Standard"
+LETTER_HEAD = "Redtra Suite Standard"
 WO_PRINT_FORMAT = "Subcontractor Work Order"
 PO_PRINT_FORMAT = "Purchase Order"
 
@@ -17,7 +17,7 @@ _LETTER_HEAD_HTML = """
 	<div style="width:44px; height:44px; border:1px dashed #cbd5e1; border-radius:6px;
 		display:flex; align-items:center; justify-content:center; font-size:9px; color:#94a3b8;">LOGO</div>
 	<div>
-		<div style="font-size:16px; font-weight:600; color:#0f172a;">BuildSuite</div>
+		<div style="font-size:16px; font-weight:600; color:#0f172a;">Redtra Suite</div>
 		<div style="font-size:11px; color:#94a3b8; font-style:italic;">Construction OS — registered address &middot; GSTIN to be configured</div>
 	</div>
 </div>

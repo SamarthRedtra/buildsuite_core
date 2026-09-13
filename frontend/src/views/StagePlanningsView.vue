@@ -94,7 +94,7 @@ const dateBaseFilters = computed(() => {
 	return filters;
 });
 
-const breadcrumbs = [{ label: "BuildSuite Core", to: "/" }, { label: "Stage Planning" }];
+const breadcrumbs = [{ label: "Redtra Suite", to: "/" }, { label: "Stage Planning" }];
 
 function onRowClick(row) {
 	router.push(`/stage-plannings/${row.name}`);

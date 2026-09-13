@@ -2,7 +2,7 @@ import { frappeRequest } from "frappe-ui-frappe-request";
 import { parseFrappeError } from "@/utils/frappeError";
 
 // Thin wrappers over buildsuite_core.api.core_settings.* — the server-persisted
-// BuildSuite Core Settings (Single doctype). Admin only.
+// Redtra Suite Settings (Single doctype). Admin only.
 
 async function call(method, args) {
 	try {

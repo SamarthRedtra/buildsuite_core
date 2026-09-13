@@ -40,14 +40,14 @@ async function retryAccess() {
 			class="max-w-2xl w-full bg-white border border-ink-200 rounded-2xl shadow-fp-sm p-8 md:p-10"
 		>
 			<p class="text-[11px] uppercase tracking-[0.18em] text-danger-700 font-semibold">
-				BuildSuite Access
+				Redtra Suite Access
 			</p>
 			<h1 class="mt-2 text-2xl md:text-3xl font-semibold text-ink-900">
 				You do not have permission to open this workspace
 			</h1>
 			<p class="mt-3 text-sm text-ink-600 leading-6">
 				Your account is authenticated, but backend access checks blocked this route.
-				Contact your administrator to request BuildSuite Core roles.
+				Contact your administrator to request Redtra Suite roles.
 			</p>
 
 			<div class="mt-6 bg-ink-50 border border-ink-200 rounded-lg p-4">

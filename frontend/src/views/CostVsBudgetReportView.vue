@@ -121,7 +121,7 @@ function printReport() {
 }
 
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Cost vs Budget by Cost Code" },
 ];
 </script>

@@ -5,7 +5,7 @@ import Autocomplete from "../../../node_modules/frappe-ui/src/components/Autocom
 import { useDocTypeList } from "@/composables/useDocTypeList";
 import { useHiddenUsers } from "@/composables/useHiddenUsers";
 
-// Users that BuildSuite Core's own UI must never surface (Administrator, Guest,
+// Users that Redtra Suite's own UI must never surface (Administrator, Guest,
 // platform System-Manager admins). Applied to every User picker centrally.
 const { hiddenUsers } = useHiddenUsers();
 
@@ -64,7 +64,7 @@ const resolvedFields = computed(() => {
 });
 
 const serverFilters = computed(() => {
-	// For the User doctype, exclude the accounts BuildSuite Core hides from its own
+	// For the User doctype, exclude the accounts Redtra Suite hides from its own
 	// pickers (Administrator, Guest, platform admins). Only the array filter form is
 	// rewritten (all User pickers use it); everywhere else, pass through untouched.
 	const usesArrayFilters = Array.isArray(props.filters) || !props.filters;

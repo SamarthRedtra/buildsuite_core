@@ -56,7 +56,7 @@ async function makeStockEntry(workOrder, purpose) {
 </script>
 
 <template>
-	<DeskPage title="Materials &amp; Manufacturing" subtitle="Project visibility over native BOMs, Work Orders, Stock Entries and warehouses." :breadcrumbs="[{ label: 'BuildSuite Core', to: '/' }, { label: 'Materials & Manufacturing' }]">
+	<DeskPage title="Materials &amp; Manufacturing" subtitle="Project visibility over native BOMs, Work Orders, Stock Entries and warehouses." :breadcrumbs="[{ label: 'Redtra Suite', to: '/' }, { label: 'Materials & Manufacturing' }]">
 		<div class="space-y-5">
 			<section class="bg-white border border-ink-200 rounded-lg p-4">
 				<DeskField label="Project filter"><DeskLinkPicker v-model="project" doctype="Project" label-field="project_name" value-field="name" placeholder="All projects" /></DeskField>

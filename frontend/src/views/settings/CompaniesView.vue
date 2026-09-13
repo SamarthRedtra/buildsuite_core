@@ -10,7 +10,7 @@ const search = ref("");
 const loading = ref(true);
 const error = ref("");
 const breadcrumbs = [
-	{ label: "BuildSuite Core", to: "/" },
+	{ label: "Redtra Suite", to: "/" },
 	{ label: "Settings", to: "/settings" },
 	{ label: "Companies" },
 ];
