@@ -1,4 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="14" fill="#16A34A"/>
-  <path d="M22 12 L66 12 L84 28 L84 44 L72 50 L84 56 L84 72 L66 88 L22 88 Z M34 24 L34 46 L56 46 L66 40 L66 30 L56 24 Z M34 54 L34 76 L56 76 L66 70 L66 60 L56 54 Z" fill-rule="evenodd" fill="white"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Redtra R Logo</title>
+  <desc id="desc">A bold white uppercase R centered on a green square.</desc>
+  <rect width="256" height="256" fill="#34A853"/>
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M72 42h65c37 0 61 22 61 55 0 24-13 42-35 50l40 67h-45l-35-61h-12v61H72V42zm39 35v43h24c15 0 24-8 24-22s-9-21-24-21h-24z"/>
 </svg>
