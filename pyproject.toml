@@ -8,6 +8,7 @@ requires-python = ">=3.14"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
+    "openpyxl>=3.1.5,<4",
     # Third-party PyPI packages only. Frappe apps go in
     # [tool.bench.frappe-dependencies] below - pip cannot resolve them, which is why the
     # commented-out "frappe~=16.0.0" here could never have worked.
