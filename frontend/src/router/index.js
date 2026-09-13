@@ -735,6 +735,28 @@ const routes = [
 				props: true,
 			},
 			{
+				path: "project-finance/pdc",
+				name: "finance-pdc-register",
+				component: () => import("@/views/finance/FinancePdcRegisterView.vue"),
+			},
+			{
+				path: "project-finance/pdc/new",
+				name: "finance-pdc-new",
+				component: () => import("@/views/finance/FinancePdcFormView.vue"),
+			},
+			{
+				path: "project-finance/pdc/:id/edit",
+				name: "finance-pdc-edit",
+				component: () => import("@/views/finance/FinancePdcFormView.vue"),
+				props: true,
+			},
+			{
+				path: "project-finance/pdc/:id",
+				name: "finance-pdc-detail",
+				component: () => import("@/views/finance/FinancePdcDetailView.vue"),
+				props: true,
+			},
+			{
 				path: "procurement/report/:slug",
 				name: "procurement-report",
 				component: () => import("@/views/procurement/reports/ProcurementReportView.vue"),
@@ -771,12 +793,7 @@ const routes = [
 			{
 				path: "stock",
 				name: "stock",
-				component: () => import("@/views/PlaceholderView.vue"),
-				props: {
-					title: "Stock",
-					icon: "📦",
-					desc: "Items, stock entries, warehouses and inventory.",
-				},
+				component: () => import("@/views/workspaces/MaterialsManufacturingWorkspace.vue"),
 			},
 			{
 				path: "assets",

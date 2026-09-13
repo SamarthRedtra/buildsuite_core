@@ -33,6 +33,7 @@
   "additional_discount_on",
   "additional_discount_percentage",
   "discount_amount",
+  "advance_recovery_percent",
   "advance_recovery",
   "expense_account",
   "totals_section",
@@ -122,7 +123,7 @@
   },
   {
    "default": "Normal",
-   "description": "A Final bill releases the retention held on earlier bills back into the payable.",
+   "description": "Classification only. Retention is released separately through ERPNext Retention Release Entry.",
    "fieldname": "bill_type",
    "fieldtype": "Select",
    "label": "Bill Type",
@@ -234,9 +235,16 @@
    "label": "Discount Amount"
   },
   {
+   "fieldname": "advance_recovery_percent",
+   "fieldtype": "Percent",
+   "label": "Advance Recovery %"
+  },
+  {
+   "description": "Actual advance allocated to the generated Purchase Invoice, capped by available supplier advances.",
    "fieldname": "advance_recovery",
    "fieldtype": "Currency",
-   "label": "Advance Recovery"
+   "label": "Advance Recovery Amount",
+   "read_only": 1
   },
   {
    "description": "Expense account the generated Purchase Invoice posts the cost to. Defaults from BuildSuite Core Settings.",

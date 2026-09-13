@@ -83,6 +83,10 @@ def drop_legacy_task_type_field():
 
 
 def seed_master_data():
+	from buildsuite_core.utils.item_conversion import ensure_item_conversion_stock_entry_type
+
+	ensure_item_conversion_stock_entry_type()
+
 	# Project Categories (our construction categories) — the New Project form and
 	# project templates key off these; the native Project Type stays Internal/External.
 	from buildsuite_core.buildsuite_core.doctype.project_category.seed_categories import seed_categories
@@ -217,10 +221,10 @@ def _seed_default_petty_cash_account():
 	if not company:
 		return
 	settings = frappe.get_single("BuildSuite Core Settings")
-	current = settings.default_petty_cash_account
-	if current and frappe.db.exists("Account", current):
+	resolved = resolve_petty_cash_account(company)
+	if settings.default_petty_cash_account == resolved:
 		return
-	settings.default_petty_cash_account = resolve_petty_cash_account(company)
+	settings.default_petty_cash_account = resolved
 	settings.flags.ignore_permissions = True
 	settings.save()
 
@@ -244,9 +248,9 @@ def seed_employee_accounting_dimension():
 
 
 def create_item_group():
-	if frappe.db.get_value("Item Group", "Raw Material"):
+	if frappe.db.exists("Item Group", "Raw Material") and not frappe.db.exists("Item Group", "Materials"):
 		frappe.rename_doc("Item Group", "Raw Material", "Materials", force=1, merge=0)
-	if frappe.db.get_value("Item Group", "Asset"):
+	if frappe.db.exists("Item Group", "Asset") and not frappe.db.exists("Item Group", "Assets"):
 		frappe.rename_doc("Item Group", "Asset", "Assets", force=1, merge=0)
 	frappe.db.commit()  # nosemgrep: frappe-manual-commit -- persist Item Group renames during install/migrate
 

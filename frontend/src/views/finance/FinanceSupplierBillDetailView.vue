@@ -29,6 +29,7 @@ import StatusBadge from "@/components/StatusBadge.vue";
 import { useWorkflow } from "@/composables/useWorkflow";
 import { usePermissions } from "@/composables/usePermissions";
 import { fmtDate, fmtINR } from "@/utils/format";
+import { createRetentionRelease } from "@/data/retentionApi";
 
 const props = defineProps({ id: { type: String, required: true } });
 const router = useRouter();
@@ -173,6 +174,30 @@ function onPrint() {
 		)}&trigger_print=1`,
 		"_blank"
 	);
+}
+
+async function onReleaseRetention() {
+	const available = Number(bill.value?.finance?.retention_outstanding) || 0;
+	const raw = window.prompt("Retention amount to release", String(available));
+	if (raw === null) return;
+	const amount = Number(raw);
+	if (amount <= 0 || amount > available)
+		return showToast(`Enter an amount between 0 and ${fmtINR(available)}.`, "error");
+	busy.value = true;
+	try {
+		await createRetentionRelease({
+			reference_doctype: "Purchase Invoice",
+			reference_name: bill.value.name,
+			amount,
+			submit: 1,
+		});
+		await load();
+		showToast("Retention released through a Retention Release Entry.");
+	} catch (err) {
+		showToast(err.message || "Retention release failed", "error");
+	} finally {
+		busy.value = false;
+	}
 }
 
 // --- pay ---
@@ -329,6 +354,15 @@ async function unlinkAdvance(row) {
 		<template v-if="bill" #actions>
 			<div class="flex items-center gap-2">
 				<StatusBadge v-for="s in statusPills" :key="s" :status="s" size="xs" />
+				<button
+					v-if="isSubmitted && bill.finance?.retention_outstanding > 0.01"
+					type="button"
+					class="text-xs px-3 py-1.5 border border-warning-300 bg-warning-50 hover:bg-warning-100 text-warning-700 font-medium rounded-md"
+					:disabled="busy"
+					@click="onReleaseRetention"
+				>
+					Release retention
+				</button>
 				<button
 					type="button"
 					class="text-xs px-2.5 py-1.5 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700 rounded-md flex items-center gap-1.5"
@@ -547,6 +581,19 @@ async function unlinkAdvance(row) {
 			<!-- payments + advances (left) · totals waterfall (right) -->
 			<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 				<section class="space-y-4">
+					<div
+						v-if="bill.retention_releases?.length"
+						class="bg-white border border-ink-200 rounded-lg overflow-hidden"
+					>
+						<div class="bg-ink-50 px-4 py-2 border-b border-ink-200 text-[11px] uppercase tracking-wider font-semibold text-ink-700">
+							Retention releases
+						</div>
+						<div v-for="r in bill.retention_releases" :key="r.name" class="flex items-center justify-between px-4 py-2.5 border-t border-ink-100 text-sm gap-2">
+							<DeskLink :to="`/app/retention-release-entry/${r.name}`" class="font-mono text-xs">{{ r.name }}</DeskLink>
+							<span class="text-ink-500">{{ fmtDate(r.posting_date) }}</span>
+							<span class="tabular-nums font-medium">{{ fmtINR(r.retention_amount) }}</span>
+						</div>
+					</div>
 					<!-- payments -->
 					<div
 						v-if="payments.length"
@@ -675,10 +722,19 @@ async function unlinkAdvance(row) {
 							>− {{ fmtINR(advanceAdjusted) }}</span
 						>
 					</div>
+					<div v-if="bill.finance?.retention_held > 0" class="flex justify-between text-warning-700">
+						<span>Retention held</span><span class="tabular-nums">− {{ fmtINR(bill.finance.retention_held) }}</span>
+					</div>
+					<div v-if="bill.finance?.retention_released > 0" class="flex justify-between text-success-700">
+						<span>Retention released</span><span class="tabular-nums">{{ fmtINR(bill.finance.retention_released) }}</span>
+					</div>
+					<div v-if="bill.finance?.retention_outstanding > 0" class="flex justify-between text-warning-700">
+						<span>Retention outstanding</span><span class="tabular-nums">{{ fmtINR(bill.finance.retention_outstanding) }}</span>
+					</div>
 					<template v-if="isSubmitted">
 						<div class="flex justify-between text-ink-600">
-							<span>Paid</span
-							><span class="tabular-nums">{{ fmtINR(payment.paid) }}</span>
+							<span>Cash paid</span
+							><span class="tabular-nums">{{ fmtINR(payment.cash_settled) }}</span>
 						</div>
 						<div
 							class="flex justify-between font-semibold"

@@ -13,7 +13,7 @@ from frappe.utils import cint
 
 
 @frappe.whitelist()
-def apply_workflow(doc: str, action: str):
+def apply_workflow(doc, action: str):
 	"""Allow workflow action on the current doc"""
 	doc = frappe.get_doc(frappe.parse_json(doc))
 	doc.load_from_db()
@@ -68,62 +68,69 @@ def apply_workflow(doc: str, action: str):
 
 
 def create_workflow_log(doc, old_state, new_state, user, workflow):
-    # The Pending Approval Log doctype is optional — skip logging (rather than
-    # break the workflow transition) when it isn't installed on the site.
-    if not frappe.db.table_exists("Pending Approval Log"):
-        return
-    now = datetime.now()
-    transitions = get_transitions(doc, workflow)
+	# The Pending Approval Log doctype is optional — skip logging (rather than
+	# break the workflow transition) when it isn't installed on the site.
+	if not frappe.db.table_exists("Pending Approval Log"):
+		return
+	now = datetime.now()
+	transitions = get_transitions(doc, workflow)
 
-    # Get the next state from transitions
-    next_state = None
-    for t in transitions:
-        next_state = t.next_state
-        break  # Exit loop on first match
+	# Get the next state from transitions
+	next_state = None
+	for t in transitions:
+		next_state = t.next_state
+		break  # Exit loop on first match
 
-    # Check if an existing approval log entry exists for the old state
-    existing_log = frappe.db.get_value(
-        "Pending Approval Log",
-        {'reference_doctype': doc.doctype, 'reference_name': doc.name, 'action': old_state},
-        'name'
-    )
+	# Check if an existing approval log entry exists for the old state
+	existing_log = frappe.db.get_value(
+		"Pending Approval Log",
+		{"reference_doctype": doc.doctype, "reference_name": doc.name, "action": old_state},
+		"name",
+	)
 
-    if existing_log:
-        frappe.db.set_value("Pending Approval Log", existing_log, 'approved', 1)
+	if existing_log:
+		frappe.db.set_value("Pending Approval Log", existing_log, "approved", 1)
 
-    # Create new Pending Approval Log only if next state is valid
-    if next_state != "Cancelled":
-        try:
-            pending_approval_log = frappe.get_doc({
-                "doctype": "Pending Approval Log",
-                "reference_doctype": doc.doctype,
-                "reference_name": doc.name,
-                "action": new_state,
-                "timestamp": now,
-                "performed_by": user
-            })
-            pending_approval_log.owner = user  # Explicitly set owner
-            pending_approval_log.insert(ignore_permissions=True, ignore_links=True, ignore_mandatory=True)
-            frappe.db.commit()
-        except Exception as e:
-            frappe.log_error(f"Error creating Pending Approval Log: {str(e)}", "Approval Log Error")
+	# Create new Pending Approval Log only if next state is valid
+	if next_state != "Cancelled":
+		try:
+			pending_approval_log = frappe.get_doc(
+				{
+					"doctype": "Pending Approval Log",
+					"reference_doctype": doc.doctype,
+					"reference_name": doc.name,
+					"action": new_state,
+					"timestamp": now,
+					"performed_by": user,
+				}
+			)
+			pending_approval_log.owner = user  # Explicitly set owner
+			pending_approval_log.insert(ignore_permissions=True, ignore_links=True, ignore_mandatory=True)
+			frappe.db.commit()
+		except Exception as e:
+			frappe.log_error(f"Error creating Pending Approval Log: {e!s}", "Approval Log Error")
 
 
 def delete_workflow_log(doc, method):
-    if doc.doctype != "Pending Approval Log" or doc.doctype!="Workflow":
-        # workflow = get_workflow(doc.doctype)
-        
-        # if not workflow:
-        #     return None
-        if frappe.db.exists("Pending Approval Log", {'reference_doctype': doc.doctype, 'reference_name': doc.name}):
-            frappe.db.delete("Pending Approval Log", filters={'reference_doctype': doc.doctype, 'reference_name': doc.name})
+	if doc.doctype != "Pending Approval Log" or doc.doctype != "Workflow":
+		# workflow = get_workflow(doc.doctype)
+
+		# if not workflow:
+		#     return None
+		if frappe.db.exists(
+			"Pending Approval Log", {"reference_doctype": doc.doctype, "reference_name": doc.name}
+		):
+			frappe.db.delete(
+				"Pending Approval Log", filters={"reference_doctype": doc.doctype, "reference_name": doc.name}
+			)
 
 
 def update_account(doc, method):
-    if doc.account_name=="Cost of Goods Sold":
-        doc.account_name = "Material Cost"
-        
+	if doc.account_name == "Cost of Goods Sold":
+		doc.account_name = "Material Cost"
+
 
 def apply_patches():
-    import frappe.model.workflow
-    frappe.model.workflow.apply_workflow = apply_workflow
+	import frappe.model.workflow
+
+	frappe.model.workflow.apply_workflow = apply_workflow

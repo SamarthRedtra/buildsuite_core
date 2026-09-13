@@ -1,24 +1,15 @@
 # Copyright (c) 2026, Infraholic Innovations Pvt. Ltd and contributors
 # For license information, please see license.txt
 
-"""Subcontractor Bill → Purchase Invoice generation.
-
-The Subcontractor Bill is the front-end instrument (free-text lines, retention, TDS,
-discount, attachment). The Purchase Invoice it generates on submit does the accounting —
-payable, taxes, TDS, retention — via ERPNext's own framework, so whatever country-compliance
-app is installed (e.g. India Compliance, which hooks Purchase Invoice server-side) posts GST
-automatically. Nothing here is GST-specific: taxes come from the bill's chosen tax template.
-"""
+"""Subcontractor Bill → native ERPNext Purchase Invoice generation."""
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 SERVICE_ITEM = "Subcontractor Work"
 SERVICE_ITEM_GROUP = "Subcontract"
-RETENTION_ACCOUNT_NAME = "Retention Payable"
 EXPENSE_ACCOUNT_NAME = "Subcontractor Charges"
-ADVANCE_ACCOUNT_NAME = "Supplier Advance"
 
 
 # --------------------------------------------------------------------------- #
@@ -36,16 +27,9 @@ def ensure_supplier(subcontractor):
 # Account + service-item resolution (per company)
 # --------------------------------------------------------------------------- #
 def resolve_accounts(company):
-	"""Return {expense, retention, advance, cost_center} for a company, creating the BuildSuite
-	accounts if a prior seed pass has not. Idempotent.
-
-	Retention/advance are created with a BLANK account_type on purpose: ERPNext's "Payable"
-	type forces a party subledger (a supplier) on every GL line, but retention is withheld
-	against the company, not a party — so a plain Current Liability / Current Asset ledger."""
+	"""Resolve only operational defaults; native ERPNext owns retention and advances."""
 	return {
 		"expense": _ensure_account(company, EXPENSE_ACCOUNT_NAME, "Expense", "Expense Account", "Expenses"),
-		"retention": _ensure_account(company, RETENTION_ACCOUNT_NAME, "Liability", "", "Current Liabilities"),
-		"advance": _ensure_account(company, ADVANCE_ACCOUNT_NAME, "Asset", "", "Current Assets"),
 		"cost_center": frappe.db.get_value("Company", company, "cost_center"),
 	}
 
@@ -131,19 +115,6 @@ def settings_expense_account_for(company):
 # --------------------------------------------------------------------------- #
 # Purchase Invoice generation
 # --------------------------------------------------------------------------- #
-def retention_held_before(bill):
-	"""Total retention withheld by this WO/subcontractor's earlier SUBMITTED bills — released
-	on a Final bill."""
-	filters = {"docstatus": 1, "name": ["!=", bill.name or ""]}
-	if bill.work_order:
-		filters["work_order"] = bill.work_order
-	else:
-		filters["subcontractor"] = bill.subcontractor
-		filters["is_direct"] = 1
-	rows = frappe.get_all("Subcontractor Bill", filters=filters, fields=["retention_amount"])
-	return sum(flt(r.retention_amount) for r in rows)
-
-
 def generate_purchase_invoice(bill):
 	"""Build, insert and submit the Purchase Invoice for a submitted Subcontractor Bill.
 
@@ -172,6 +143,11 @@ def generate_purchase_invoice(bill):
 	pi.bill_date = str(bill.supplier_invoice_date) if bill.get("supplier_invoice_date") else bill_date
 	pi.project = bill.project
 	pi.update_stock = 0
+	pi.enable_retention = cint(flt(bill.retention_percent) > 0)
+	pi.retention_percentage = flt(bill.retention_percent)
+	pi.enable_advance_recovery = cint(flt(bill.advance_recovery_percent) > 0)
+	pi.advance_recovery_percentage = flt(bill.advance_recovery_percent)
+	pi.allocate_advances_automatically = pi.enable_advance_recovery
 	if frappe.get_meta("Purchase Invoice").has_field("subcontractor_bill"):
 		pi.subcontractor_bill = bill.name
 
@@ -199,8 +175,8 @@ def generate_purchase_invoice(bill):
 	if not pi.items:
 		frappe.throw(_("Nothing to invoice — every line is zero."))
 
-	# Taxes: the bill's chosen template rows (Add), then retention / advance (Deduct), and a
-	# Final-bill retention release (Add).
+	# Only statutory taxes are rows. Retention and advance recovery use native PI fields and
+	# ledgers, and retention release is a separate Retention Release Entry.
 	for t in bill.taxes:
 		pi.append(
 			"taxes",
@@ -213,14 +189,6 @@ def generate_purchase_invoice(bill):
 				"add_deduct_tax": "Add",
 			},
 		)
-	if flt(bill.retention_amount) > 0 and bill.bill_type != "Final":
-		_append_actual(pi, accts["retention"], _("Retention"), flt(bill.retention_amount), "Deduct")
-	if bill.bill_type == "Final":
-		release = retention_held_before(bill)
-		if release > 0:
-			_append_actual(pi, accts["retention"], _("Retention Release"), release, "Add")
-	if flt(bill.advance_recovery) > 0:
-		_append_actual(pi, accts["advance"], _("Advance Recovery"), flt(bill.advance_recovery), "Deduct")
 
 	# Discount → native PI fields.
 	if bill.additional_discount_on:
@@ -240,18 +208,3 @@ def generate_purchase_invoice(bill):
 	pi.insert()
 	pi.submit()
 	return pi.name
-
-
-def _append_actual(pi, account_head, description, amount, add_deduct):
-	pi.append(
-		"taxes",
-		{
-			"charge_type": "Actual",
-			"account_head": account_head,
-			"description": description,
-			"rate": 0,
-			"tax_amount": amount,
-			"category": "Total",
-			"add_deduct_tax": add_deduct,
-		},
-	)

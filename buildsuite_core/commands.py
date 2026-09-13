@@ -22,4 +22,38 @@ def change_app_route(new_route):
 	click.echo(rename_app_route(new_route))
 
 
-commands = [change_app_route]
+@click.command("buildsuite-retire-legacy-apps")
+@click.option("--site", required=True, help="Site to inspect or prepare")
+@click.option("--apply", "apply_changes", is_flag=True, help="Archive and apply the retirement preparation")
+@click.option(
+	"--allow-production",
+	is_flag=True,
+	help="Allow --apply outside a site whose name contains 'uat'",
+)
+def retire_legacy_apps(site, apply_changes=False, allow_production=False):
+	"""Dry-run or apply the audited Redtra/Construction retirement preparation."""
+	import json
+
+	import frappe
+
+	from buildsuite_core.legacy_retirement import apply_retirement_preparation, get_retirement_plan
+
+	frappe.init(site=site)
+	frappe.connect()
+	try:
+		result = (
+			apply_retirement_preparation(allow_production=allow_production)
+			if apply_changes
+			else get_retirement_plan()
+		)
+		if apply_changes:
+			frappe.db.commit()
+		click.echo(json.dumps(result, indent=2, default=str))
+	except Exception:
+		frappe.db.rollback()
+		raise
+	finally:
+		frappe.destroy()
+
+
+commands = [change_app_route, retire_legacy_apps]

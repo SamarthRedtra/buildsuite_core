@@ -9,6 +9,10 @@ default to the site's default company."""
 import frappe
 from frappe.utils import flt
 
+from buildsuite_core.utils.invoice_finance import (
+	available_invoice_finance_fields,
+	invoice_finance_sql_field,
+)
 from buildsuite_core.utils.project import default_company
 
 BUCKETS = ["Current", "0-30", "31-60", "61-90", "90+"]
@@ -32,23 +36,43 @@ def receivables_and_payables(company: str | None = None):
 	"""Aged open receivables (Sales Invoices) and payables (Purchase Invoices), each row bucketed
 	by days overdue. Payables carry a supplier/subcontractor kind + any retention withheld."""
 	company = company or default_company()
+	si_fields = set(available_invoice_finance_fields("Sales Invoice"))
+	pi_fields = set(available_invoice_finance_fields("Purchase Invoice"))
+	si_retention = invoice_finance_sql_field("retention_outstanding_amount", si_fields)
+	si_released = invoice_finance_sql_field("retention_released_amount", si_fields)
+	si_advance = invoice_finance_sql_field("total_advance", si_fields)
+	pi_retention = invoice_finance_sql_field("retention_outstanding_amount", pi_fields, "pi")
+	pi_released = invoice_finance_sql_field("retention_released_amount", pi_fields, "pi")
+	pi_advance = invoice_finance_sql_field("total_advance", pi_fields, "pi")
 	receivables = frappe.db.sql(
-		"""SELECT name AS id, customer_name AS party, due_date AS due,
-			outstanding_amount AS outstanding, GREATEST(DATEDIFF(CURDATE(), due_date), 0) AS days_overdue
+		f"""SELECT name AS id, customer_name AS party, due_date AS due,
+			outstanding_amount AS outstanding,
+			{si_retention} AS retention,
+			{si_released} AS retention_released,
+			{si_advance} AS advance_adjusted,
+			grand_total AS gross_total,
+			GREATEST(DATEDIFF(CURDATE(), due_date), 0) AS days_overdue
 		FROM `tabSales Invoice`
-		WHERE docstatus = 1 AND outstanding_amount > 0 AND company = %s
+		WHERE docstatus = 1
+			AND (outstanding_amount > 0 OR {si_retention} > 0)
+			AND company = %s
 		ORDER BY due_date""",
 		(company,),
 		as_dict=True,
 	)
 	payables = frappe.db.sql(
-		"""SELECT pi.name AS id, pi.supplier_name AS party, pi.due_date AS due,
-			pi.outstanding_amount AS outstanding, GREATEST(DATEDIFF(CURDATE(), pi.due_date), 0) AS days_overdue,
-			IFNULL((SELECT SUM(sb.retention_amount) FROM `tabSubcontractor Bill` sb
-				WHERE sb.purchase_invoice = pi.name AND sb.docstatus = 1), 0) AS retention,
+		f"""SELECT pi.name AS id, pi.supplier_name AS party, pi.due_date AS due,
+			pi.outstanding_amount AS outstanding,
+			{pi_retention} AS retention,
+			{pi_released} AS retention_released,
+			{pi_advance} AS advance_adjusted,
+			pi.grand_total AS gross_total,
+			GREATEST(DATEDIFF(CURDATE(), pi.due_date), 0) AS days_overdue,
 			(SELECT s.supplier_group FROM `tabSupplier` s WHERE s.name = pi.supplier) AS supplier_group
 		FROM `tabPurchase Invoice` pi
-		WHERE pi.docstatus = 1 AND pi.outstanding_amount > 0 AND pi.company = %s
+		WHERE pi.docstatus = 1
+			AND (pi.outstanding_amount > 0 OR {pi_retention} > 0)
+			AND pi.company = %s
 		ORDER BY pi.due_date""",
 		(company,),
 		as_dict=True,
@@ -117,11 +141,17 @@ def financial_position(company: str | None = None):
 	company = company or default_company()
 
 	def doc_sum(doctype, field):
+		if not frappe.db.has_column(doctype, field):
+			return 0.0
 		return flt(
 			frappe.db.sql(
 				# field/doctype are server-controlled identifiers (called with hardcoded values);
 				# the company value is parameterized. Concatenated to avoid an f-string in SQL.
-				"SELECT IFNULL(SUM(`" + field + "`), 0) FROM `tab" + doctype + "` WHERE docstatus = 1 AND company = %s",
+				"SELECT IFNULL(SUM(`"
+				+ field
+				+ "`), 0) FROM `tab"
+				+ doctype
+				+ "` WHERE docstatus = 1 AND company = %s",
 				(company,),
 			)[0][0]
 		)
@@ -130,7 +160,8 @@ def financial_position(company: str | None = None):
 	cash = _gl_balance(company, _account_names(company, "Cash", excludes=["Petty"]))
 	petty_out, to_reimburse = _petty_split(company)
 	customers_owe = doc_sum("Sales Invoice", "outstanding_amount")
-	retention = doc_sum("Subcontractor Bill", "retention_amount")
+	retention_receivable = doc_sum("Sales Invoice", "retention_outstanding_amount")
+	retention_payable = doc_sum("Purchase Invoice", "retention_outstanding_amount")
 
 	# Advances = the still-unallocated portion of a party's advance Payment Entries: money we
 	# paid suppliers ahead (an asset) / customers paid us ahead (a liability), not yet drawn
@@ -167,12 +198,13 @@ def financial_position(company: str | None = None):
 		"cash": cash,
 		"pettyCashOut": petty_out,
 		"customersOwe": customers_owe,
+		"retentionReceivable": retention_receivable,
 		"advancesPaid": advances_paid,
 	}
 	owe = {
 		"suppliers": suppliers,
 		"subcontractors": subcontractors,
-		"retention": retention,
+		"retention": retention_payable,
 		"advancesReceived": advances_received,
 		"toReimburse": to_reimburse,
 	}
@@ -193,7 +225,12 @@ def _direct_expense_range(company):
 
 
 @frappe.whitelist()
-def profit_and_loss(project: str | None = None, from_date: str | None = None, to_date: str | None = None, company: str | None = None):
+def profit_and_loss(
+	project: str | None = None,
+	from_date: str | None = None,
+	to_date: str | None = None,
+	company: str | None = None,
+):
 	"""Our own account-tree Profit & Loss for the Project Finance workspace — computed from the
 	posted GL so it's a real P&L, but ours (labels + layout), not the stock ERPNext financial
 	statement. Income and expense ledger accounts, scoped to an optional project + period, with
@@ -232,7 +269,9 @@ def profit_and_loss(project: str | None = None, from_date: str | None = None, to
 	for r in rows:
 		income = r.root_type == "Income"
 		amt = flt(r.credit - r.debit) if income else flt(r.debit - r.credit)
-		a = accounts.setdefault(r.account, {"root_type": r.root_type, "lft": r.lft, "amount": 0.0, "docs": []})
+		a = accounts.setdefault(
+			r.account, {"root_type": r.root_type, "lft": r.lft, "amount": 0.0, "docs": []}
+		)
 		a["amount"] += amt
 		who = r.party or r.against or r.voucher_type
 		a["docs"].append(
@@ -296,7 +335,12 @@ def cash_bank_accounts(company: str | None = None):
 
 
 @frappe.whitelist()
-def cash_bank_statement(account: str | None = None, from_date: str | None = None, to_date: str | None = None, company: str | None = None):
+def cash_bank_statement(
+	account: str | None = None,
+	from_date: str | None = None,
+	to_date: str | None = None,
+	company: str | None = None,
+):
 	"""A running-balance statement for one Bank/Cash account, from its GL. Cash/Bank are asset
 	accounts, so a debit is money in and a credit is money out. The opening balance folds in
 	everything posted before `from_date` (0 when no period is set — the statement runs from the

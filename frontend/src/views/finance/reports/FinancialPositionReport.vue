@@ -32,6 +32,7 @@ const haveRows = computed(() => [
 	{ label: "Bank balance", value: fp.value.have.bank },
 	{ label: "Cash in hand", value: fp.value.have.cash },
 	{ label: "Customers owe us", value: fp.value.have.customersOwe },
+	{ label: "Retention receivable", value: fp.value.have.retentionReceivable },
 	{ label: "Petty cash with holders", value: fp.value.have.pettyCashOut },
 	{ label: "Advances paid to suppliers", value: fp.value.have.advancesPaid },
 ]);

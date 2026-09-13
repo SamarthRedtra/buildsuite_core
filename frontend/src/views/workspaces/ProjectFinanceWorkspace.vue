@@ -51,6 +51,7 @@ const visibleSections = computed(() => {
 			"invoices",
 			"bills",
 			"payments",
+			"pdc",
 			"reports",
 		];
 	if (hasAny(FINANCE_SITE_ROLES)) return ["petty-cash", "expenses"];
@@ -67,6 +68,7 @@ const TRANSACTIONS = [
 	{ section: "invoices", icon: "file-text", label: "Invoices" },
 	{ section: "bills", icon: "banknote", label: "Bills" },
 	{ section: "payments", icon: "refresh-ccw", label: "Payments" },
+	{ section: "pdc", icon: "calendar-clock", label: "Post-dated Cheques" },
 ];
 const MASTERS = [
 	{ section: "customers", icon: "users-round", label: "Customers" },

@@ -56,6 +56,8 @@ function mapRow(r) {
 		previousRate: r.previous_rate,
 		updatedAt: r.effective_date,
 		updatedBy: r.modified_by,
+		itemCode: r.item_code || "",
+		supplyMethod: r.supply_method || "Non-stock",
 	};
 }
 
@@ -105,7 +107,7 @@ onMounted(() => reload({ withCounts: true }));
 const editing = ref(null);
 const saving = ref(false);
 const formError = ref("");
-const form = ref({ code: "", description: "", category: "", uom: "", currentRate: 0 });
+const form = ref({ code: "", description: "", category: "", uom: "", currentRate: 0, itemCode: "", supplyMethod: "Non-stock" });
 const rateRes = ref(null);
 
 const drawer = computed(() => rateRes.value?.doc || null);
@@ -162,6 +164,8 @@ function startAdd() {
 		category: categoryOptions.value[0],
 		uom: "",
 		currentRate: 0,
+		itemCode: "",
+		supplyMethod: "Non-stock",
 	};
 	formError.value = "";
 	editing.value = "new";
@@ -188,6 +192,10 @@ async function save() {
 		formError.value = "Current rate cannot be negative.";
 		return;
 	}
+	if (["Purchase", "Manufacture"].includes(form.value.supplyMethod) && !form.value.itemCode) {
+		formError.value = "Map an ERPNext Item for purchased or manufactured resources.";
+		return;
+	}
 	saving.value = true;
 	try {
 		if (editing.value === "new") {
@@ -197,6 +205,8 @@ async function save() {
 				category: form.value.category,
 				uom: form.value.uom,
 				current_rate: Number(form.value.currentRate),
+				item_code: form.value.itemCode || null,
+				supply_method: form.value.supplyMethod,
 			});
 			showToast("Rate created");
 		} else {
@@ -205,6 +215,8 @@ async function save() {
 				category: form.value.category,
 				uom: form.value.uom,
 				current_rate: Number(form.value.currentRate),
+				item_code: form.value.itemCode || null,
+				supply_method: form.value.supplyMethod,
 			});
 			showToast("Rate updated");
 			if (rateRes.value) rateRes.value.reload();
@@ -233,6 +245,8 @@ function openRate(id) {
 				currentRate: d.current_rate,
 				updatedAt: d.effective_date,
 				updatedBy: d.modified_by,
+				itemCode: d.item_code || "",
+				supplyMethod: d.supply_method || "Non-stock",
 				history: (d.rate_history || []).map((h) => ({
 					id: h.name,
 					rate: h.rate,
@@ -276,6 +290,8 @@ function editRate() {
 		category: target.category,
 		uom: target.unit,
 		currentRate: target.currentRate,
+		itemCode: target.itemCode || "",
+		supplyMethod: target.supplyMethod || "Non-stock",
 	};
 	formError.value = "";
 	editing.value = target;
@@ -465,6 +481,14 @@ async function removeRate() {
 							</DeskSelect>
 						</DeskField>
 					</div>
+					<div class="grid grid-cols-2 gap-3">
+						<DeskField label="Supply method">
+							<DeskSelect v-model="form.supplyMethod"><option>Purchase</option><option>Manufacture</option><option>Non-stock</option></DeskSelect>
+						</DeskField>
+						<DeskField label="ERPNext Item" :hint="form.supplyMethod === 'Non-stock' ? 'Optional for non-stock resources.' : 'Required for material planning.'">
+							<DeskLinkPicker v-model="form.itemCode" doctype="Item" label-field="item_name" value-field="name" :search-fields="['item_name', 'item_code', 'name']" placeholder="Map item…" />
+						</DeskField>
+					</div>
 					<DeskField label="Description" required>
 						<DeskInput
 							v-model="form.description"
@@ -565,6 +589,9 @@ async function removeRate() {
 								fmtINR(drawer.currentRate)
 							}}</span>
 							<span class="text-xs text-ink-500">per {{ drawer.unit }}</span>
+						</div>
+						<div class="text-[11px] text-ink-500 mt-2">
+							{{ drawer.supplyMethod }}<span v-if="drawer.itemCode"> · {{ drawer.itemCode }}</span>
 						</div>
 					</div>
 

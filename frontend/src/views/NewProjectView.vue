@@ -88,6 +88,12 @@ const form = reactive({
 	pm: "",
 	location: "",
 	description: "",
+	enableRetention: false,
+	retentionPercentage: 10,
+	retentionReleaseDate: "",
+	retentionReleaseAfterDays: 0,
+	enableAdvanceRecovery: false,
+	advanceRecoveryPercentage: 20,
 	parentId: route.query.parentId || null,
 	// Sub-project capability is opt-in: off by default so a new project is a leaf
 	// unless the user deliberately allows children (is_group = 1).
@@ -266,6 +272,21 @@ async function save() {
 			estimated_costing: Number(form.budget),
 			project_manager: form.pm || null,
 			notes: form.description,
+			enable_retention: form.enableRetention ? 1 : 0,
+			retention_percentage: form.enableRetention
+				? Number(form.retentionPercentage) || 0
+				: 0,
+			retention_release_date:
+				form.enableRetention && form.retentionReleaseDate
+					? form.retentionReleaseDate
+					: null,
+			retention_release_after_days: form.enableRetention
+				? Number(form.retentionReleaseAfterDays) || 0
+				: 0,
+			enable_advance_recovery: form.enableAdvanceRecovery ? 1 : 0,
+			advance_recovery_percentage: form.enableAdvanceRecovery
+				? Number(form.advanceRecoveryPercentage) || 0
+				: 0,
 			custom_seed_default_stages: form.seedDefaultStages ? 1 : 0,
 			custom_seed_default_tasks: form.seedDefaultTasks ? 1 : 0,
 			custom_seed_default_work_packages: form.seedDefaultWorkPackages ? 1 : 0,
@@ -600,6 +621,55 @@ const breadcrumbs = computed(() => {
 							<option>Delayed</option>
 							<option>Completed</option>
 						</DeskSelect>
+					</DeskField>
+				</DeskSection>
+
+				<DeskSection title="Commercial terms">
+					<DeskField
+						label="Retention"
+						hint="Hold retention on VAT-inclusive customer and supplier invoices."
+					>
+						<label class="inline-flex items-center gap-2 cursor-pointer select-none">
+							<input
+								type="checkbox"
+								v-model="form.enableRetention"
+								class="accent-brand-600"
+							/>
+							<span class="text-sm text-ink-700">Enable retention</span>
+						</label>
+					</DeskField>
+					<DeskField v-if="form.enableRetention" label="Retention %">
+						<DeskInput v-model.number="form.retentionPercentage" type="number" min="0" max="99.99" />
+					</DeskField>
+					<DeskField
+						v-if="form.enableRetention"
+						label="Release date"
+						hint="Optional fixed release date."
+					>
+						<DeskInput v-model="form.retentionReleaseDate" type="date" />
+					</DeskField>
+					<DeskField
+						v-if="form.enableRetention"
+						label="Release after days"
+						hint="Used when no fixed date is set."
+					>
+						<DeskInput v-model.number="form.retentionReleaseAfterDays" type="number" min="0" />
+					</DeskField>
+					<DeskField
+						label="Advance recovery"
+						hint="Cap each invoice's adjustment against real unallocated advances."
+					>
+						<label class="inline-flex items-center gap-2 cursor-pointer select-none">
+							<input
+								type="checkbox"
+								v-model="form.enableAdvanceRecovery"
+								class="accent-brand-600"
+							/>
+							<span class="text-sm text-ink-700">Enable advance recovery</span>
+						</label>
+					</DeskField>
+					<DeskField v-if="form.enableAdvanceRecovery" label="Advance recovery %">
+						<DeskInput v-model.number="form.advanceRecoveryPercentage" type="number" min="0" max="100" />
 					</DeskField>
 				</DeskSection>
 

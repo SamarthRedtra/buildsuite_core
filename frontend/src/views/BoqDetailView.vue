@@ -30,6 +30,7 @@ import DeskTextarea from "@/components/desk/DeskTextarea.vue";
 import DeskLinkPicker from "@/components/desk/DeskLinkPicker.vue";
 import { fmtINR, fmtCompactINR, fmtDate } from "@/utils/format";
 import { getWorkspaceIconPath } from "@/utils/workspaceIcons";
+import { boqToSalesOrder, createBoqMaterialRequest } from "@/data/contractApi";
 
 const props = defineProps({ id: { type: String, required: true } });
 const router = useRouter();
@@ -81,6 +82,7 @@ const boq = computed(() => {
 		approvedDate: d.approved_date,
 		baseRevisionId: d.base_revision,
 		sourceScoId: d.source_sco,
+		salesOrder: d.sales_order || "",
 	};
 });
 
@@ -1076,6 +1078,26 @@ function primaryAction() {
 	else if (canApprove.value) approve();
 }
 
+async function createSalesOrder() {
+	try {
+		const result = await boqToSalesOrder(boq.value.id);
+		showToast(result.already_created ? `Sales Order ${result.sales_order} already exists.` : `Draft Sales Order ${result.sales_order} created.`);
+		reloadTree();
+		window.open(`/app/sales-order/${result.sales_order}`, "_blank");
+	} catch (err) {
+		showToast(err.message || "Could not create Sales Order", "error");
+	}
+}
+async function createMaterialRequest(supplyMethod) {
+	try {
+		const result = await createBoqMaterialRequest(boq.value.id, supplyMethod);
+		showToast(result.already_created ? `${result.material_request} already exists.` : `${supplyMethod} Material Request ${result.material_request} created.`);
+		window.open(`/app/material-request/${result.material_request}`, "_blank");
+	} catch (err) {
+		showToast(err.message || `Could not create ${supplyMethod} Material Request`, "error");
+	}
+}
+
 // The BOQ id + revision live in the subtitle (as in the prototype), so the
 // breadcrumb trail ends at the project — not a raw BOQ-id crumb.
 const subtitle = computed(() => (boq.value ? `${boq.value.id} · R${boq.value.revision}` : ""));
@@ -1121,6 +1143,17 @@ const breadcrumbs = computed(() => {
 						</span>
 					</template>
 					<template #menu>
+						<button
+							v-if="boq.status === 'Approved'"
+							type="button"
+							class="text-xs px-2 py-1 border border-ink-200 bg-white hover:bg-ink-50"
+							style="border-radius: 2px"
+							@click="createSalesOrder"
+						>
+							{{ boq.salesOrder ? `Open Sales Order ${boq.salesOrder}` : 'Create Sales Order' }}
+						</button>
+						<button v-if="boq.status === 'Approved'" type="button" class="text-xs px-2 py-1 border border-ink-200 bg-white hover:bg-ink-50" style="border-radius: 2px" @click="createMaterialRequest('Purchase')">Purchase requirements</button>
+						<button v-if="boq.status === 'Approved'" type="button" class="text-xs px-2 py-1 border border-ink-200 bg-white hover:bg-ink-50" style="border-radius: 2px" @click="createMaterialRequest('Manufacture')">Manufacturing requirements</button>
 						<!-- Compare toggle — LEFT AS-IS per prompt (Phase-5 prelude: Revision Compare page).
                  Uses brand-green styling and rounded corners deliberately. -->
 						<button

@@ -21,9 +21,7 @@ class TestMobilePermissions(BuildSuiteTestCase):
 		frappe.db.commit()  # noqa: bs-manual-commit — seed once for the whole class
 
 	def _perm(self, doctype, role, ptype):
-		return frappe.db.get_value(
-			"Custom DocPerm", {"parent": doctype, "role": role, "permlevel": 0}, ptype
-		)
+		return frappe.db.get_value("Custom DocPerm", {"parent": doctype, "role": role, "permlevel": 0}, ptype)
 
 	def test_site_engineer_full_material_request(self):
 		for p in ("select", "read", "write", "create", "submit", "cancel"):
@@ -47,9 +45,11 @@ class TestMobilePermissions(BuildSuiteTestCase):
 		self.assertFalse(self._perm("Journal Entry", "BuildSuite Site Engineer", "write"))
 		self.assertTrue(self._perm("UOM", "BuildSuite Foreman", "select"))
 
-	def test_field_attendance_registers_full_for_creators(self):
-		for dt in ("Field Attendance", "Labour Attendance Register", "Overtime Attendance Register"):
-			self.assertTrue(self._perm(dt, "BuildSuite HR Manager", "create"), dt)
+	def test_field_attendance_is_full_and_derived_registers_are_read_only(self):
+		self.assertTrue(self._perm("Field Attendance", "BuildSuite HR Manager", "create"))
+		for dt in ("Labour Attendance Register", "Overtime Attendance Register"):
+			self.assertTrue(self._perm(dt, "BuildSuite HR Manager", "read"), dt)
+			self.assertFalse(self._perm(dt, "BuildSuite HR Manager", "create"), dt)
 
 	def test_layering_does_not_revoke_base(self):
 		# The base matrix grants the Foreman create on Field Attendance — the mobile layer must

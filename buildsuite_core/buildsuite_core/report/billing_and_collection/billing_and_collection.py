@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Infraholic Innovations Pvt. Ltd and contributors
 # For license information, please see license.txt
 
-"""Billing and Collection — one row per client invoice on a project (raised, received,
+"""Billing and Collection — one row per client invoice on a project (raised, cash received,
 outstanding, days overdue), with Invoiced / Received / Overdue / Retention held summary
 cards. Matches the prototype's per-invoice view rather than a single cumulative total.
 
@@ -9,12 +9,16 @@ A Script Report so the filters bind only when present (Frappe runs with empty fi
 page load; a Query Report's %(x)s would crash). Project is required; the date range is
 optional and applied only when supplied.
 
-Retention withheld by the client isn't modelled on the invoice yet — the retention_amount
-field exists only on subcontractor bills (what we withhold from subcontractors, a different
-figure). Reported as "—" rather than a zero that would read as "the client withholds nothing"."""
+Retention and advances are read from ERPNext's native Sales Invoice fields and are never
+classified as cash receipts."""
 
 import frappe
 from frappe import _
+
+from buildsuite_core.utils.invoice_finance import (
+	available_invoice_finance_fields,
+	invoice_finance_sql_field,
+)
 
 
 def execute(filters=None):
@@ -38,9 +42,10 @@ def execute(filters=None):
 		{"label": _("Due"), "fieldname": "due_date", "fieldtype": "Date", "width": 100},
 		{"label": _("Overdue (days)"), "fieldname": "overdue_days", "fieldtype": "Int", "width": 110},
 		{"label": _("Invoiced"), "fieldname": "invoiced", "fieldtype": "Currency", "width": 120},
-		{"label": _("Received"), "fieldname": "received", "fieldtype": "Currency", "width": 120},
+		{"label": _("Cash Received"), "fieldname": "received", "fieldtype": "Currency", "width": 120},
+		{"label": _("Advance"), "fieldname": "advance", "fieldtype": "Currency", "width": 110},
 		{"label": _("Outstanding"), "fieldname": "outstanding", "fieldtype": "Currency", "width": 120},
-		{"label": _("Retention"), "fieldname": "retention", "fieldtype": "Data", "width": 90},
+		{"label": _("Retention"), "fieldname": "retention", "fieldtype": "Currency", "width": 110},
 	]
 	if not filters.get("project"):
 		return columns, [], None, None, []
@@ -52,9 +57,12 @@ def execute(filters=None):
 		conditions += " AND si.posting_date <= %(to_date)s"
 	if filters.get("overdue_only"):
 		conditions += " AND si.outstanding_amount > 0 AND si.due_date < CURDATE()"
+	si_fields = set(available_invoice_finance_fields("Sales Invoice"))
+	retention_field = invoice_finance_sql_field("retention_outstanding_amount", si_fields, "si")
+	advance_field = invoice_finance_sql_field("total_advance", si_fields, "si")
 
 	data = frappe.db.sql(
-		"""
+		f"""
 		SELECT si.name AS invoice,
 			si.customer AS customer,
 			si.posting_date AS raised,
@@ -62,29 +70,36 @@ def execute(filters=None):
 			CASE WHEN si.outstanding_amount > 0 AND si.due_date < CURDATE()
 				THEN DATEDIFF(CURDATE(), si.due_date) ELSE 0 END AS overdue_days,
 			si.grand_total AS invoiced,
-			si.grand_total - si.outstanding_amount AS received,
-			si.outstanding_amount AS outstanding
+			GREATEST(si.grand_total - IFNULL({retention_field}, 0)
+				- IFNULL({advance_field}, 0) - si.outstanding_amount, 0) AS received,
+			IFNULL({advance_field}, 0) AS advance,
+			si.outstanding_amount AS outstanding,
+			IFNULL({retention_field}, 0) AS retention
 		FROM `tabSales Invoice` si
-		WHERE si.docstatus = 1 AND si.project = %(project)s """ + conditions + """
+		WHERE si.docstatus = 1 AND si.project = %(project)s """
+		+ conditions
+		+ """
 		ORDER BY si.posting_date DESC, si.name DESC
 		""",
 		filters,
 		as_dict=True,
 	)
 
-	# Client retention isn't modelled on the invoice — show "—" per row (see module docstring).
-	for row in data:
-		row["retention"] = "—"
-
 	invoiced = sum(row.invoiced or 0 for row in data)
 	received = sum(row.received or 0 for row in data)
+	retention = sum(row.retention or 0 for row in data)
 	overdue = sum(row.outstanding or 0 for row in data if row.overdue_days)
 
 	report_summary = [
 		{"label": _("Invoiced"), "value": invoiced, "datatype": "Currency"},
-		{"label": _("Received"), "value": received, "datatype": "Currency", "indicator": "green"},
-		{"label": _("Overdue"), "value": overdue, "datatype": "Currency", "indicator": "red" if overdue else ""},
-		{"label": _("Retention held"), "value": "—", "datatype": "Data"},
+		{"label": _("Cash received"), "value": received, "datatype": "Currency", "indicator": "green"},
+		{
+			"label": _("Overdue"),
+			"value": overdue,
+			"datatype": "Currency",
+			"indicator": "red" if overdue else "",
+		},
+		{"label": _("Retention outstanding"), "value": retention, "datatype": "Currency"},
 	]
 
 	return columns, data, None, None, report_summary

@@ -75,6 +75,12 @@ const form = reactive({
 	discount_value: 0,
 	tc_name: "",
 	terms: "",
+	enable_retention: false,
+	retention_percentage: 10,
+	retention_account: "",
+	retention_release_date: "",
+	enable_advance_recovery: false,
+	advance_recovery_percentage: 20,
 });
 const termsOpen = ref(false);
 const errors = reactive({ supplier: "", po: "", lines: "" });
@@ -124,6 +130,12 @@ if (isEdit.value) {
 						: Number(b.additional_discount_percentage) || 0,
 				tc_name: b.tc_name || "",
 				terms: b.terms || "",
+				enable_retention: Number(b.enable_retention) === 1,
+				retention_percentage: Number(b.retention_percentage) || 0,
+				retention_account: b.retention_account || "",
+				retention_release_date: b.retention_release_date || "",
+				enable_advance_recovery: Number(b.enable_advance_recovery) === 1,
+				advance_recovery_percentage: Number(b.advance_recovery_percentage) || 0,
 			});
 			if (!form.lines.length) form.lines = [blankLine()];
 			termsOpen.value = !!b.terms;
@@ -235,7 +247,25 @@ const wf = computed(() => {
 	const grandTotal = taxable + tax;
 	const grandDiscount = form.discount_on === "Grand Total" ? discBase(grandTotal) : 0;
 	const billTotal = Math.max(0, grandTotal - grandDiscount);
-	return { net, netDiscount, taxable, taxRows, tax, grandTotal, grandDiscount, billTotal };
+	const retention = form.enable_retention
+		? (billTotal * (Number(form.retention_percentage) || 0)) / 100
+		: 0;
+	const advanceLimit = form.enable_advance_recovery
+		? (billTotal * (Number(form.advance_recovery_percentage) || 0)) / 100
+		: 0;
+	return {
+		net,
+		netDiscount,
+		taxable,
+		taxRows,
+		tax,
+		grandTotal,
+		grandDiscount,
+		billTotal,
+		retention,
+		advanceLimit,
+		amountDueNow: Math.max(billTotal - retention - advanceLimit, 0),
+	};
 });
 
 const breadcrumbs = computed(() => [
@@ -288,6 +318,22 @@ async function save() {
 			discount_amount: form.discount_type === "₹" ? Number(form.discount_value) || 0 : 0,
 			tc_name: form.tc_name || undefined,
 			terms: form.terms || undefined,
+			enable_retention: form.enable_retention ? 1 : 0,
+			retention_percentage: form.enable_retention
+				? Number(form.retention_percentage) || 0
+				: 0,
+			retention_account: form.enable_retention
+				? form.retention_account || undefined
+				: undefined,
+			retention_release_date:
+				form.enable_retention && form.retention_release_date
+					? form.retention_release_date
+					: undefined,
+			enable_advance_recovery: form.enable_advance_recovery ? 1 : 0,
+			advance_recovery_percentage: form.enable_advance_recovery
+				? Number(form.advance_recovery_percentage) || 0
+				: 0,
+			allocate_advances_automatically: form.enable_advance_recovery ? 1 : 0,
 		});
 		showToast(isEdit.value ? "Bill updated." : "Bill saved as draft.");
 		router.push(`/project-finance/supplier-bills/${res.name}`);
@@ -507,6 +553,33 @@ async function save() {
 					</div>
 				</DeskSection>
 
+				<DeskSection title="Retention &amp; advance recovery" :cols="3">
+					<DeskField label="Retention">
+						<label class="inline-flex items-center gap-2 cursor-pointer select-none">
+							<input type="checkbox" v-model="form.enable_retention" class="accent-brand-600" />
+							<span class="text-sm text-ink-700">Hold retention</span>
+						</label>
+					</DeskField>
+					<DeskField v-if="form.enable_retention" label="Retention %">
+						<DeskInput v-model.number="form.retention_percentage" type="number" min="0" max="99.99" />
+					</DeskField>
+					<DeskField v-if="form.enable_retention" label="Retention account" hint="Optional when the company default is configured.">
+						<DeskLinkPicker v-model="form.retention_account" doctype="Account" label-field="name" value-field="name" :filters="accountFilters" placeholder="Company default" />
+					</DeskField>
+					<DeskField v-if="form.enable_retention" label="Release date">
+						<DeskInput v-model="form.retention_release_date" type="date" />
+					</DeskField>
+					<DeskField label="Advance recovery">
+						<label class="inline-flex items-center gap-2 cursor-pointer select-none">
+							<input type="checkbox" v-model="form.enable_advance_recovery" class="accent-brand-600" />
+							<span class="text-sm text-ink-700">Recover available advance</span>
+						</label>
+					</DeskField>
+					<DeskField v-if="form.enable_advance_recovery" label="Advance recovery %">
+						<DeskInput v-model.number="form.advance_recovery_percentage" type="number" min="0" max="100" />
+					</DeskField>
+				</DeskSection>
+
 				<div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 mb-6">
 					<div class="space-y-5 min-w-0">
 						<div>
@@ -697,6 +770,15 @@ async function save() {
 						>
 							<span>Bill total</span
 							><span class="tabular-nums">{{ fmtINR(wf.billTotal) }}</span>
+						</div>
+						<div v-if="wf.retention > 0" class="flex justify-between text-warning-700">
+							<span>Retention held</span><span class="tabular-nums">− {{ fmtINR(wf.retention) }}</span>
+						</div>
+						<div v-if="wf.advanceLimit > 0" class="flex justify-between text-brand-700">
+							<span>Advance recovery limit</span><span class="tabular-nums">− {{ fmtINR(wf.advanceLimit) }}</span>
+						</div>
+						<div class="flex justify-between font-semibold text-ink-900 border-t border-ink-200 pt-1.5">
+							<span>Due now</span><span class="tabular-nums">{{ fmtINR(wf.amountDueNow) }}</span>
 						</div>
 					</div>
 				</div>

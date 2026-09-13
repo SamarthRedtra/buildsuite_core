@@ -12,6 +12,12 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from buildsuite_core.utils.invoice_finance import (
+	available_invoice_finance_fields,
+	invoice_finance_summary,
+	invoice_pdc_summary,
+)
+
 BILL = "Subcontractor Bill"
 WORK_ORDER = "Subcontractor Work Order"
 
@@ -43,10 +49,6 @@ def _serialize(doc):
 	advances = _linked_advances_for_bill(doc)
 	adjusted = sum(a["allocated"] for a in advances)
 	pay = _payment_summary(doc)
-	# Advance adjustment settles the payable but is not a cash payment — split it out of "Paid".
-	pay["advance_adjusted"] = adjusted
-	if doc.docstatus == 1:
-		pay["paid"] = max(flt(pay["paid"]) - adjusted, 0)
 	return {
 		"name": doc.name,
 		"is_direct": doc.is_direct,
@@ -74,6 +76,7 @@ def _serialize(doc):
 		"additional_discount_on": doc.additional_discount_on,
 		"additional_discount_percentage": doc.additional_discount_percentage,
 		"discount_amount": doc.discount_amount,
+		"advance_recovery_percent": doc.advance_recovery_percent,
 		"advance_recovery": doc.advance_recovery,
 		"expense_account": doc.expense_account,
 		# Totals waterfall
@@ -117,6 +120,12 @@ def _serialize(doc):
 			for t in doc.taxes
 		],
 		"payment": pay,
+		"finance": pay,
+		"pdc": (
+			invoice_pdc_summary("Purchase Invoice", doc.purchase_invoice)
+			if doc.purchase_invoice
+			else {"rows": [], "active_allocated": 0, "cleared": 0, "bounced": 0}
+		),
 		"actions": _available_actions(doc),
 	}
 
@@ -136,23 +145,10 @@ def _available_actions(doc):
 def _payment_summary(doc):
 	"""Read payment state THROUGH the generated PI (the bill stores none of its own)."""
 	if not doc.purchase_invoice or not frappe.db.exists("Purchase Invoice", doc.purchase_invoice):
-		return {"invoiced": 0, "paid": 0, "outstanding": 0, "status": "Unpaid"}
-	pi = frappe.db.get_value(
-		"Purchase Invoice",
-		doc.purchase_invoice,
-		["grand_total", "outstanding_amount", "status"],
-		as_dict=True,
-	)
-	invoiced = flt(pi.grand_total)
-	outstanding = flt(pi.outstanding_amount)
-	paid = invoiced - outstanding
-	if outstanding <= 0.01 and invoiced > 0:
-		status = "Paid"
-	elif paid > 0.01:
-		status = "Partly Paid"
-	else:
-		status = "Unpaid"
-	return {"invoiced": invoiced, "paid": paid, "outstanding": outstanding, "status": status}
+		return invoice_finance_summary(frappe._dict(), cash_key="paid")
+	pi = frappe.get_doc("Purchase Invoice", doc.purchase_invoice)
+	adjusted = sum(row["allocated"] for row in _linked_advances_for_bill(doc))
+	return invoice_finance_summary(pi, advance_adjusted=adjusted, cash_key="paid")
 
 
 # --------------------------------------------------------------------------- #
@@ -196,7 +192,15 @@ def list_bills(project: str | None = None):
 	pis = {}
 	if pi_names:
 		for pi in frappe.get_all(
-			PI, filters={"name": ["in", pi_names]}, fields=["name", "grand_total", "outstanding_amount"]
+			PI,
+			filters={"name": ["in", pi_names]},
+			fields=[
+				"name",
+				"grand_total",
+				"outstanding_amount",
+				*available_invoice_finance_fields(PI),
+				"docstatus",
+			],
 		):
 			pis[pi.name] = pi
 	out = []
@@ -204,13 +208,7 @@ def list_bills(project: str | None = None):
 		pay = None
 		if b.docstatus == 1 and b.purchase_invoice in pis:
 			pi = pis[b.purchase_invoice]
-			grand, outstanding = flt(pi.grand_total), flt(pi.outstanding_amount)
-			if outstanding <= 0.01 and grand > 0:
-				pay = "Paid"
-			elif grand - outstanding > 0.01:
-				pay = "Partly Paid"
-			else:
-				pay = "Unpaid"
+			pay = invoice_finance_summary(pi, advance_adjusted=pi.get("total_advance"), cash_key="paid")
 		out.append(
 			{
 				"name": b.name,
@@ -220,10 +218,12 @@ def list_bills(project: str | None = None):
 				"project": b.project,
 				"date": str(b.date) if b.date else None,
 				"gross": flt(b.gross),
-				"retention_amount": flt(b.retention_amount),
-				"net_payable": flt(b.net_payable),
+				"retention_amount": pay["retention_outstanding"] if pay else flt(b.retention_amount),
+				"advance_adjusted": pay["advance_adjusted"] if pay else 0,
+				"cash_paid": pay["cash_settled"] if pay else 0,
+				"net_payable": pay["amount_due_now"] if pay else flt(b.net_payable),
 				"status": {0: "Draft", 1: "Submitted", 2: "Cancelled"}.get(b.docstatus, "Draft"),
-				"payment_status": pay,
+				"payment_status": pay["status"] if pay else None,
 			}
 		)
 	return out
@@ -232,7 +232,7 @@ def list_bills(project: str | None = None):
 @frappe.whitelist()
 def get_wo_bill_context(work_order: str):
 	"""Everything the New (Work Order) bill screen needs: WO header, the derived this-period
-	lines (measured − previously billed), and the next RA number."""
+	lines (measured - previously billed), and the next RA number."""
 	from buildsuite_core.api.subcontract import get_wo_measurements
 	from buildsuite_core.buildsuite_core.doctype.subcontractor_bill.subcontractor_bill import (
 		previously_billed_by_line,
@@ -270,6 +270,7 @@ def get_wo_bill_context(work_order: str):
 		"project_name": frappe.db.get_value("Project", wo.project, "project_name"),
 		"company": wo.company,
 		"retention_percent": wo.retention_percent,
+		"advance_recovery_percent": frappe.db.get_value("Project", wo.project, "advance_recovery_percentage"),
 		"status": wo.status,
 		"total_value": wo.total_value,
 		"next_ra_no": max([r for r in existing if r] or [0]) + 1,
@@ -373,7 +374,9 @@ def save_bill(payload: str):
 	doc.additional_discount_on = data.get("additional_discount_on") or "Net Total"
 	doc.additional_discount_percentage = flt(data.get("additional_discount_percentage"))
 	doc.discount_amount = flt(data.get("discount_amount"))
-	doc.advance_recovery = flt(data.get("advance_recovery"))
+	doc.advance_recovery_percent = flt(
+		data.get("advance_recovery_percent", data.get("advance_recovery_percentage"))
+	)
 	if "expense_account" in data:
 		doc.expense_account = data.get("expense_account")
 
@@ -476,7 +479,14 @@ def make_payment_entry(name: str):
 
 
 @frappe.whitelist()
-def record_payment(name: str, amount: str | float | None = None, date: str | None = None, mode_of_payment: str | None = None, paid_from: str | None = None, reference_no: str | None = None):
+def record_payment(
+	name: str,
+	amount: str | float | None = None,
+	date: str | None = None,
+	mode_of_payment: str | None = None,
+	paid_from: str | None = None,
+	reference_no: str | None = None,
+):
 	"""Create + submit a Payment Entry against the bill's Purchase Invoice (used by tests / API)."""
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 

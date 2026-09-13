@@ -79,13 +79,6 @@ def get_property_setters():
 			"property_type": "Check",
 		},
 		{
-			"doctype": "Stock Entry",
-			"fieldname": "project",
-			"property": "reqd",
-			"property_type": "Check",
-			"value": "1",
-		},
-		{
 			"doctype_or_field": "DocType",
 			"doctype": "Stock Entry",
 			"fieldname": None,
@@ -98,7 +91,11 @@ def get_property_setters():
 			"fieldname": "bom_info_section",
 			"property": "depends_on",
 			"property_type": "Data",
-			"value": 'eval:doc.stock_entry_type&&doc.purpose== "Material Receipt"',
+			"value": (
+				'eval:in_list(["Material Issue", "Manufacture", "Repack", '
+				'"Send to Subcontractor", "Material Transfer for Manufacture", '
+				'"Material Consumption for Manufacture", "Disassemble"], doc.purpose)'
+			),
 		},
 		{
 			"doctype": "Stock Entry",

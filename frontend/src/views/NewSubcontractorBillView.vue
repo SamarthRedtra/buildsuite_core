@@ -73,6 +73,7 @@ const form = ref({
 	supplier_invoice_no: "",
 	supplier_invoice_date: "",
 	retention_percent: 5,
+	advance_recovery_percent: 0,
 	lines: [{ scope: "", cost_code: null, amount: 0 }],
 });
 
@@ -87,6 +88,7 @@ async function loadWoContext(wo) {
 		const ctx = await getWoBillContext(wo);
 		woContext.value = ctx;
 		form.value.retention_percent = ctx.retention_percent ?? 5;
+		form.value.advance_recovery_percent = ctx.advance_recovery_percent ?? 0;
 	} catch (err) {
 		woContext.value = null;
 		showToast(err.message || "Failed to load work order", "error");
@@ -112,6 +114,7 @@ watch(
 					supplier_invoice_no: bill.supplier_invoice_no || "",
 					supplier_invoice_date: bill.supplier_invoice_date || "",
 					retention_percent: bill.retention_percent ?? 0,
+					advance_recovery_percent: bill.advance_recovery_percent ?? 0,
 					lines: bill.is_direct
 						? (bill.lines || []).map((l) => ({
 								scope: l.scope || "",
@@ -147,7 +150,10 @@ const gross = computed(() => (mode.value === "wo" ? woGross.value : directGross.
 const retention = computed(
 	() => +((gross.value * (Number(form.value.retention_percent) || 0)) / 100).toFixed(2)
 );
-const netPayable = computed(() => +(gross.value - retention.value).toFixed(2));
+const advanceRecovery = computed(
+	() => +((gross.value * (Number(form.value.advance_recovery_percent) || 0)) / 100).toFixed(2)
+);
+const netPayable = computed(() => +(gross.value - retention.value - advanceRecovery.value).toFixed(2));
 
 function addLine() {
 	form.value.lines.push({ scope: "", cost_code: null, amount: 0 });
@@ -185,6 +191,7 @@ async function onSave() {
 						supplier_invoice_no: form.value.supplier_invoice_no,
 						supplier_invoice_date: form.value.supplier_invoice_date || undefined,
 						retention_percent: form.value.retention_percent,
+						advance_recovery_percent: form.value.advance_recovery_percent,
 				  }
 				: {
 						name: editingId.value || undefined,
@@ -195,6 +202,7 @@ async function onSave() {
 						supplier_invoice_no: form.value.supplier_invoice_no,
 						supplier_invoice_date: form.value.supplier_invoice_date || undefined,
 						retention_percent: form.value.retention_percent,
+						advance_recovery_percent: form.value.advance_recovery_percent,
 						lines: form.value.lines
 							.filter((l) => (l.scope || "").trim() || Number(l.amount) > 0)
 							.map((l) => ({
@@ -307,6 +315,9 @@ const breadcrumbs = computed(() => [
 							step="0.5"
 						/>
 					</DeskField>
+					<DeskField label="Advance recovery (%)">
+						<DeskInput v-model.number="form.advance_recovery_percent" type="number" min="0" max="100" step="0.5" />
+					</DeskField>
 				</DeskSection>
 
 				<div
@@ -390,6 +401,10 @@ const breadcrumbs = computed(() => [
 										−{{ fmtINR(retention) }}
 									</td>
 								</tr>
+								<tr v-if="advanceRecovery > 0" class="bg-ink-50">
+									<td colspan="5" class="px-3 py-1 text-right text-info-700">Advance recovery limit ({{ form.advance_recovery_percent }}%)</td>
+									<td class="px-3 py-1 text-right tabular-nums text-info-700">−{{ fmtINR(advanceRecovery) }}</td>
+								</tr>
 								<tr class="bg-ink-50 border-t border-ink-200">
 									<td
 										colspan="5"
@@ -457,6 +472,9 @@ const breadcrumbs = computed(() => [
 							min="0"
 							step="0.5"
 						/>
+					</DeskField>
+					<DeskField label="Advance recovery (%)">
+						<DeskInput v-model.number="form.advance_recovery_percent" type="number" min="0" max="100" step="0.5" />
 					</DeskField>
 				</DeskSection>
 
@@ -552,6 +570,11 @@ const breadcrumbs = computed(() => [
 									<td class="px-3 py-1 text-right tabular-nums text-warning-700">
 										−{{ fmtINR(retention) }}
 									</td>
+									<td></td>
+								</tr>
+								<tr v-if="advanceRecovery > 0" class="bg-ink-50">
+									<td colspan="2" class="px-3 py-1 text-right text-info-700">Advance recovery limit ({{ form.advance_recovery_percent }}%)</td>
+									<td class="px-3 py-1 text-right tabular-nums text-info-700">−{{ fmtINR(advanceRecovery) }}</td>
 									<td></td>
 								</tr>
 								<tr class="bg-ink-50 border-t border-ink-200">

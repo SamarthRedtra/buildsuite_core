@@ -10,7 +10,7 @@ from buildsuite_core.buildsuite_core.doctype.boq.boq_rollup import compute_boq_t
 
 class BOQ(Document):
 	def before_insert(self):
-		if self.project and not self.company:
+		if self.project:
 			self.company = frappe.db.get_value("Project", self.project, "company")
 		if not self.prepared_by:
 			self.prepared_by = frappe.session.user
@@ -22,7 +22,7 @@ class BOQ(Document):
 			self.revision = 1
 
 	def validate(self):
-		if self.project and not self.company:
+		if self.project:
 			self.company = frappe.db.get_value("Project", self.project, "company")
 		compute_boq_totals(self)
 

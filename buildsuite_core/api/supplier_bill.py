@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Infraholic Innovations Pvt. Ltd and contributors
 # For license information, please see license.txt
 
-"""Project Finance › Bills — the direct SUPPLIER bill, a thin front-end over ERPNext's
+"""Project Finance > Bills — the direct SUPPLIER bill, a thin front-end over ERPNext's
 Purchase Invoice (money out). Mirrors the customer-invoice (Sales Invoice) wrapper: create a
 draft, submit (posts the payable), and pay (a real Payment Entry from a Bank/Cash account).
 Subcontractor bills are a separate doctype and reuse their own screens; the Bills panel lists
@@ -11,6 +11,12 @@ import frappe
 from frappe import _
 from frappe.utils import flt, nowdate
 
+from buildsuite_core.utils.invoice_finance import (
+	available_invoice_finance_fields,
+	invoice_finance_summary,
+	invoice_pdc_summary,
+	invoice_retention_releases,
+)
 from buildsuite_core.utils.project import default_company
 
 PI = "Purchase Invoice"
@@ -63,23 +69,11 @@ def _expense_account(company):
 
 
 def _payment_summary(name):
-	pi = frappe.db.get_value(
-		PI, name, ["grand_total", "outstanding_amount", "status", "docstatus"], as_dict=True
-	)
-	if not pi or pi.docstatus == 0:
-		return {"invoiced": 0, "paid": 0, "outstanding": 0, "status": "Draft"}
-	invoiced = flt(pi.grand_total)
-	outstanding = flt(pi.outstanding_amount)
-	paid = invoiced - outstanding
-	if pi.docstatus == 2:
-		status = "Cancelled"
-	elif outstanding <= 0.01 and invoiced > 0:
-		status = "Paid"
-	elif paid > 0.01:
-		status = "Partly Paid"
-	else:
-		status = "Unpaid"
-	return {"invoiced": invoiced, "paid": paid, "outstanding": outstanding, "status": status}
+	if not frappe.db.exists(PI, name):
+		return invoice_finance_summary(frappe._dict(), cash_key="paid")
+	doc = frappe.get_doc(PI, name)
+	adjusted = sum(row["allocated"] for row in _linked_advances(doc))
+	return invoice_finance_summary(doc, advance_adjusted=adjusted, cash_key="paid")
 
 
 def _ref_is_advance(pe_type, paid_amount, unallocated, allocated):
@@ -164,12 +158,7 @@ def _linked_advances(doc):
 def _serialize(doc):
 	advances = _linked_advances(doc)
 	adjusted = sum(a["allocated"] for a in advances)
-	pay = _payment_summary(doc.name)
-	# Advance adjustment settles the payable but is not a cash payment — split it out of "Paid"
-	# so the totals read the way the prototype shows them.
-	pay["advance_adjusted"] = adjusted
-	if doc.docstatus == 1:
-		pay["paid"] = max(flt(pay["paid"]) - adjusted, 0)
+	pay = invoice_finance_summary(doc, advance_adjusted=adjusted, cash_key="paid")
 	return {
 		"name": doc.name,
 		"kind": "supplier",
@@ -193,8 +182,22 @@ def _serialize(doc):
 		"net_total": doc.net_total,
 		"total_taxes_and_charges": doc.total_taxes_and_charges,
 		"grand_total": doc.grand_total,
+		"enable_retention": doc.get("enable_retention"),
+		"retention_percentage": flt(doc.get("retention_percentage")),
+		"retention_account": doc.get("retention_account"),
+		"retention_release_date": doc.get("retention_release_date"),
+		"retention_amount": flt(doc.get("retention_amount")),
+		"retention_released_amount": flt(doc.get("retention_released_amount")),
+		"retention_outstanding_amount": flt(doc.get("retention_outstanding_amount")),
+		"enable_advance_recovery": doc.get("enable_advance_recovery"),
+		"advance_recovery_percentage": flt(doc.get("advance_recovery_percentage")),
+		"advance_recovery_amount": flt(doc.get("advance_recovery_amount")),
+		"allocate_advances_automatically": doc.get("allocate_advances_automatically"),
 		"advance_adjusted": adjusted,
 		"advances": advances,
+		"finance": pay,
+		"pdc": invoice_pdc_summary(PI, doc.name) if doc.name else {"rows": []},
+		"retention_releases": invoice_retention_releases(PI, doc.name),
 		"items": [
 			{
 				"item_code": r.item_code,
@@ -257,11 +260,13 @@ def list_payables(company: str | None = None):
 			"due_date",
 			"grand_total",
 			"outstanding_amount",
+			*available_invoice_finance_fields(PI),
 			"status",
 			"docstatus",
 		],
 		order_by="posting_date desc, creation desc",
 	):
+		pay = invoice_finance_summary(pi, advance_adjusted=pi.get("total_advance"), cash_key="paid")
 		rows.append(
 			{
 				"kind": "supplier",
@@ -270,11 +275,13 @@ def list_payables(company: str | None = None):
 				"project": pi.project,
 				"date": str(pi.posting_date) if pi.posting_date else None,
 				"due_date": str(pi.due_date) if pi.due_date else None,
-				"total": flt(pi.grand_total),
-				"outstanding": flt(pi.outstanding_amount) if pi.docstatus == 1 else 0,
-				"retention": 0,  # direct supplier bills carry no retention
+				"total": pay["gross_total"],
+				"outstanding": pay["amount_due_now"],
+				"retention": pay["retention_outstanding"],
+				"advance_adjusted": pay["advance_adjusted"],
+				"cash_paid": pay["cash_settled"],
 				"docstatus": pi.docstatus,
-				"status": _pay_status(pi.docstatus, flt(pi.grand_total), flt(pi.outstanding_amount)),
+				"status": pay["status"],
 			}
 		)
 
@@ -298,10 +305,21 @@ def list_payables(company: str | None = None):
 		outstanding = grand
 		if sb.purchase_invoice and frappe.db.exists(PI, sb.purchase_invoice):
 			pi = frappe.db.get_value(
-				PI, sb.purchase_invoice, ["grand_total", "outstanding_amount"], as_dict=True
+				PI,
+				sb.purchase_invoice,
+				[
+					"grand_total",
+					"outstanding_amount",
+					*available_invoice_finance_fields(PI),
+					"docstatus",
+				],
+				as_dict=True,
 			)
-			grand = flt(pi.grand_total)
-			outstanding = flt(pi.outstanding_amount)
+			pay = invoice_finance_summary(pi, advance_adjusted=pi.get("total_advance"), cash_key="paid")
+			grand = pay["gross_total"]
+			outstanding = pay["amount_due_now"]
+		else:
+			pay = None
 		rows.append(
 			{
 				"kind": "subcontractor",
@@ -312,13 +330,15 @@ def list_payables(company: str | None = None):
 				"due_date": None,
 				"total": grand,
 				"outstanding": outstanding,
-				"retention": flt(sb.retention_amount),
+				"retention": pay["retention_outstanding"] if pay else flt(sb.retention_amount),
+				"advance_adjusted": pay["advance_adjusted"] if pay else 0,
+				"cash_paid": pay["cash_settled"] if pay else 0,
 				"docstatus": 1,
-				"status": _pay_status(1, grand, outstanding),
+				"status": pay["status"] if pay else _pay_status(1, grand, outstanding),
 			}
 		)
 
-	rows.sort(key=lambda r: (r["date"] or ""), reverse=True)
+	rows.sort(key=lambda r: r["date"] or "", reverse=True)
 	return rows
 
 
@@ -340,14 +360,7 @@ def payables_summary(company: str | None = None):
 	Retention held (withheld on non-final subcontractor bills), and supplier Advances paid."""
 	company = company or default_company()
 	total = sum(flt(r["outstanding"]) for r in list_payables(company))
-	retention = frappe.db.sql(
-		"""
-		SELECT COALESCE(SUM(retention_amount), 0)
-		FROM `tabSubcontractor Bill`
-		WHERE docstatus = 1 AND company = %(company)s AND bill_type != 'Final'
-		""",
-		{"company": company},
-	)
+	retention = sum(flt(row["retention"]) for row in list_payables(company))
 	advances = frappe.db.sql(
 		"""
 		SELECT COALESCE(SUM(unallocated_amount), 0)
@@ -359,7 +372,7 @@ def payables_summary(company: str | None = None):
 	)
 	return {
 		"outstanding": total,
-		"retention": flt(retention[0][0]) if retention else 0,
+		"retention": retention,
 		"advances": flt(advances[0][0]) if advances else 0,
 	}
 
@@ -430,7 +443,7 @@ def get_po_bill_lines(purchase_order: str):
 @frappe.whitelist()
 def get_item_details(item_code: str):
 	"""Item master defaults for a direct bill line — the item name, its stock UOM and a buying
-	rate (Item Price buying list, else last purchase rate) to pre-fill qty × rate."""
+	rate (Item Price buying list, else last purchase rate) to pre-fill qty x rate."""
 	it = frappe.db.get_value("Item", item_code, ["item_name", "stock_uom", "description"], as_dict=True) or {}
 	rate = frappe.db.get_value("Item Price", {"item_code": item_code, "buying": 1}, "price_list_rate") or 0
 	if not rate:
@@ -483,6 +496,19 @@ def save_bill(payload: str):
 	pi.due_date = data.get("due_date") or pi.posting_date
 	pi.project = project or None
 	pi.update_stock = 0
+	for fieldname in (
+		"enable_retention",
+		"retention_percentage",
+		"retention_account",
+		"retention_release_date",
+		"enable_advance_recovery",
+		"advance_recovery_percentage",
+		"allocate_advances_automatically",
+	):
+		if fieldname in data:
+			pi.set(fieldname, data.get(fieldname))
+	if data.get("enable_advance_recovery"):
+		pi.allocate_advances_automatically = 1
 
 	fallback_item = ensure_bill_item()
 	expense = _expense_account(company)
@@ -666,7 +692,7 @@ def list_payments(name: str):
 
 @frappe.whitelist()
 def record_advance(
-	supplier: str,
+	supplier: str | None,
 	amount: str | float,
 	date: str | None = None,
 	pay_from: str | None = None,
@@ -819,6 +845,15 @@ def link_advance(name: str, payment_entry: str, amount: str | float):
 	amount = flt(amount)
 	if amount <= 0:
 		frappe.throw(_("Enter an allocation greater than zero."))
+	current_adjusted = sum(row["allocated"] for row in _linked_advances(pi))
+	recovery_limit = flt(pi.get("advance_recovery_amount"))
+	if pi.get("enable_advance_recovery") and current_adjusted + amount > recovery_limit + 0.01:
+		frappe.throw(
+			_("Advance recovery is capped at {0}; {1} is already adjusted.").format(
+				frappe.format_value(recovery_limit, "Currency"),
+				frappe.format_value(current_adjusted, "Currency"),
+			)
+		)
 
 	pe = frappe.get_doc(PE, payment_entry)
 	if pe.docstatus != 1 or pe.payment_type != "Pay" or pe.party != pi.supplier:

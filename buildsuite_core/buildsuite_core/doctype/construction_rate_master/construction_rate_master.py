@@ -23,16 +23,20 @@ class ConstructionRateMaster(Document):
 		current_rate: DF.Currency
 		disabled: DF.Check
 		effective_date: DF.Date | None
+		item_code: DF.Link | None
 		notes: DF.SmallText | None
 		previous_rate: DF.Currency
 		rate_code: DF.Data
 		rate_history: DF.Table[ConstructionRateHistory]
 		rate_master_category: DF.Link | None
 		rate_name: DF.Data
+		supply_method: DF.Literal["Purchase", "Manufacture", "Non-stock"]
 		uom: DF.Link
 	# end: auto-generated types
 
 	def validate(self):
+		if self.supply_method in ("Purchase", "Manufacture") and not self.item_code:
+			frappe.throw(f"ERPNext Item is required when Supply Method is {self.supply_method}.")
 		self.sync_rate_history()
 
 	def sync_rate_history(self):

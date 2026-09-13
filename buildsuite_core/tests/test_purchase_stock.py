@@ -120,12 +120,15 @@ class TestPurchaseStockProjectField(BuildSuiteTestCase):
 		supplier = self._supplier()
 		item = self._item()
 		wh = self._warehouse()
+		currency = self._currency()
 		with self.assertRaises(frappe.MandatoryError):
 			frappe.get_doc(
 				{
 					"doctype": "Purchase Receipt",
 					"supplier": supplier.name,
 					"company": self.company,
+					"currency": currency,
+					"conversion_rate": 1,
 					"items": [{"item_code": item.name, "qty": 1, "rate": 10, "warehouse": wh}],
 				}
 			).insert(ignore_permissions=True)
@@ -136,6 +139,8 @@ class TestPurchaseStockProjectField(BuildSuiteTestCase):
 				"doctype": "Purchase Receipt",
 				"supplier": supplier.name,
 				"company": self.company,
+				"currency": currency,
+				"conversion_rate": 1,
 				"project": p.name,
 				"items": [{"item_code": item.name, "qty": 1, "rate": 10, "warehouse": wh}],
 			}
@@ -176,18 +181,19 @@ class TestPurchaseStockProjectField(BuildSuiteTestCase):
 		self.assertEqual(pi2.project, p.name)
 
 	def test_project_field_on_stock_entry(self):
-		# BUY-005 — project is present and mandatory on Stock Entry.
+		# Project remains available for BuildSuite orchestration, but is optional so
+		# standard non-project ERPNext stock and manufacturing flows remain valid.
 		item = self._item()
 		wh = self._warehouse()
-		with self.assertRaises(frappe.MandatoryError):
-			frappe.get_doc(
-				{
-					"doctype": "Stock Entry",
-					"stock_entry_type": "Material Receipt",
-					"company": self.company,
-					"items": [{"item_code": item.name, "qty": 1, "t_warehouse": wh, "basic_rate": 10}],
-				}
-			).insert(ignore_permissions=True)
+		without_project = frappe.get_doc(
+			{
+				"doctype": "Stock Entry",
+				"stock_entry_type": "Material Receipt",
+				"company": self.company,
+				"items": [{"item_code": item.name, "qty": 1, "t_warehouse": wh, "basic_rate": 10}],
+			}
+		).insert(ignore_permissions=True)
+		self.assertFalse(without_project.project)
 
 		p = self._make_project(company=self.company)
 		se = frappe.get_doc(

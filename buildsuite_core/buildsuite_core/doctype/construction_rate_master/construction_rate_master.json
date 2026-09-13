@@ -12,6 +12,8 @@
   "category",
   "rate_master_category",
   "uom",
+  "item_code",
+  "supply_method",
   "column_break_iosw",
   "current_rate",
   "previous_rate",
@@ -55,6 +57,21 @@
    "label": "UOM",
    "options": "UOM",
    "reqd": 1
+  },
+  {
+   "description": "Optional ERPNext Item used by BOQ material planning and manufacturing.",
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "label": "ERPNext Item",
+   "options": "Item"
+  },
+  {
+   "default": "Non-stock",
+   "description": "How an approved BOQ requirement is supplied.",
+   "fieldname": "supply_method",
+   "fieldtype": "Select",
+   "label": "Supply Method",
+   "options": "Purchase\nManufacture\nNon-stock"
   },
   {
    "fieldname": "current_rate",

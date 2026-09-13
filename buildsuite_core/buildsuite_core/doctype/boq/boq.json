@@ -27,6 +27,7 @@
   "margin_amount",
   "tax_amount",
   "total",
+  "sales_order",
   "section_break_wp",
   "wp_summaries"
  ],
@@ -167,6 +168,14 @@
    "fieldtype": "Currency",
    "in_list_view": 1,
    "label": "Total",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_order",
+   "fieldtype": "Link",
+   "label": "Sales Order",
+   "no_copy": 1,
+   "options": "Sales Order",
    "read_only": 1
   },
   {

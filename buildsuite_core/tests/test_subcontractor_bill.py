@@ -108,11 +108,14 @@ class TestSubcontractorBill(BuildSuiteTestCase):
 		# The PI posts directly against the subcontractor Supplier — no shadow supplier.
 		self.assertEqual(pi.supplier, sub.name)
 		self.assertEqual(pi.subcontractor_bill, bill.name)
-		# Expense recognised at FULL value (100k); retention only reduces the payable.
+		# Expense and invoice stay at full value; native retention is a separate payable.
 		self.assertEqual(flt(pi.total), 100000)
 		deduct = [t for t in pi.taxes if t.add_deduct_tax == "Deduct"]
-		self.assertTrue(any("Retention" in (t.description or "") for t in deduct))
-		self.assertAlmostEqual(flt(pi.grand_total), 90000, places=2)
+		self.assertFalse(deduct)
+		self.assertAlmostEqual(flt(pi.grand_total), 100000, places=2)
+		self.assertAlmostEqual(flt(pi.retention_amount), 10000, places=2)
+		self.assertAlmostEqual(flt(pi.retention_outstanding_amount), 10000, places=2)
+		self.assertAlmostEqual(flt(pi.outstanding_amount), 90000, places=2)
 
 	def test_expense_account_flows_to_pi(self):
 		from buildsuite_core.utils.subcontract_billing import resolve_accounts
@@ -234,7 +237,7 @@ class TestSubcontractorBill(BuildSuiteTestCase):
 		bill = frappe.get_doc({"doctype": "Subcontractor Bill", "work_order": wo.name, "date": "2026-07-20"})
 		bill.fetch_lines()
 		bill.insert(ignore_permissions=True)
-		# 40 measured × 85 = 3400 gross; retention 5% = 170.
+		# 40 measured x 85 = 3400 gross; retention 5% = 170.
 		self.assertEqual(flt(bill.gross), 3400)
 		self.assertEqual(flt(bill.retention_amount), 170)
 		bill.submit()

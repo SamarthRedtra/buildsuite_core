@@ -3,6 +3,8 @@
 
 """Home dashboard — the KPIs are scoped to the logged-in user's visible projects/tasks."""
 
+from unittest.mock import patch
+
 import frappe
 
 from buildsuite_core.api.home import get_home_dashboard
@@ -10,6 +12,12 @@ from buildsuite_core.tests.base import BuildSuiteTestCase
 
 
 class TestHomeDashboard(BuildSuiteTestCase):
+	def test_optional_dashboard_aggregate_is_zero_before_schema_sync(self):
+		from buildsuite_core.api.project_dashboard import _sum
+
+		with patch.object(frappe.db, "has_column", return_value=False):
+			self.assertEqual(_sum("Purchase Invoice", {}, "retention_outstanding_amount"), 0)
+
 	def _persona_user(self, persona, prefix):
 		email = f"{prefix}-{self._n}@example.com"
 		frappe.get_doc(

@@ -40,8 +40,11 @@ class FieldAttendance(Document):
 	from typing import TYPE_CHECKING
 
 	if TYPE_CHECKING:
-		from buildsuite_core.buildsuite_core.doctype.field_attendance_employee.field_attendance_employee import FieldAttendanceEmployee
 		from frappe.types import DF
+
+		from buildsuite_core.buildsuite_core.doctype.field_attendance_employee.field_attendance_employee import (
+			FieldAttendanceEmployee,
+		)
 
 		amended_from: DF.Link | None
 		comments: DF.SmallText | None
@@ -79,10 +82,7 @@ class FieldAttendance(Document):
 				la_map.get(row.employee, []),
 				ot_map.get(row.employee, []),
 			)
-			row.labour_rate, row.overtime_rate = get_employee_rates(
-				emp, self.date, structure_cache
-			)
-
+			row.labour_rate, row.overtime_rate = get_employee_rates(emp, self.date, structure_cache)
 
 	# ------------------------------------------------------------------
 	# submit / cancel
@@ -140,18 +140,14 @@ class FieldAttendance(Document):
 
 			if row.status == "Overtime Only" and flt(row.overtime_hours) <= 0:
 				frappe.throw(
-					_("Row {0}: Overtime hours are required when status is Overtime Only.").format(
-						row.idx
-					)
+					_("Row {0}: Overtime hours are required when status is Overtime Only.").format(row.idx)
 				)
 
 			emp_ids.append(row.employee)
 
 		dupes = [e for e, count in Counter(emp_ids).items() if count > 1]
 		if dupes:
-			frappe.throw(
-				_("The same employee appears more than once: {0}").format(", ".join(dupes))
-			)
+			frappe.throw(_("The same employee appears more than once: {0}").format(", ".join(dupes)))
 
 	# ------------------------------------------------------------------
 	# batch lookups - one query each instead of one per row
@@ -177,8 +173,7 @@ class FieldAttendance(Document):
 			fields.append("custom_labour_wage_type")
 
 		return {
-			d.name: d
-			for d in frappe.get_all("Employee", filters={"name": ["in", emp_ids]}, fields=fields)
+			d.name: d for d in frappe.get_all("Employee", filters={"name": ["in", emp_ids]}, fields=fields)
 		}
 
 	def get_leave_map(self):
@@ -332,9 +327,7 @@ class FieldAttendance(Document):
 
 		if mapped == "Half Day" and half_count >= 2:
 			frappe.throw(
-				_("{0}: Only 2 Half Day attendances are allowed on {1}.").format(
-					emp_name, self.date
-				)
+				_("{0}: Only 2 Half Day attendances are allowed on {1}.").format(emp_name, self.date)
 			)
 
 		if mapped == "Absent" and (half_count or has_full):
@@ -348,6 +341,7 @@ class FieldAttendance(Document):
 # ----------------------------------------------------------------------
 # register creation / cancellation
 # ----------------------------------------------------------------------
+
 
 def create_registers(doc_name):
 	"""Create the Labour / Overtime register entries for a submitted Field Attendance.
@@ -430,9 +424,7 @@ def create_labour_attendance(employee, date, project, status, reference, comment
 	doc.submit()
 
 
-def create_overtime_attendance(
-	employee, date, project, overtime_hours, reference, comments, overtime_rate
-):
+def create_overtime_attendance(employee, date, project, overtime_hours, reference, comments, overtime_rate):
 	doc = frappe.get_doc(
 		{
 			"doctype": "Overtime Attendance Register",
@@ -452,6 +444,7 @@ def create_overtime_attendance(
 # ----------------------------------------------------------------------
 # rates
 # ----------------------------------------------------------------------
+
 
 def get_employee_rates(emp, date, structure_cache=None):
 	"""`emp` is a dict from get_employee_map(), not an employee id."""
@@ -502,6 +495,7 @@ def get_employee_rates(emp, date, structure_cache=None):
 # whitelisted helpers
 # ----------------------------------------------------------------------
 
+
 def _labour_filters():
 	"""Employment filter differs depending on whether hrms is on the site."""
 	if "hrms" in frappe.get_installed_apps():
@@ -544,20 +538,15 @@ def get_employees(date: str, project: str | None = None):
 def get_assigned_employees(project: str):
 	frappe.has_permission("Field Attendance", throw=True)
 
-	if "hrms" in frappe.get_installed_apps():
-		labour_condition = "e.employment_type = 'Labour'"
-	else:
-		labour_condition = "e.is_labour = 1"
-
 	return frappe.db.sql_list(
-		f"""
+		"""
 		SELECT pa.parent
 		FROM `tabProject Assigned` pa
 		JOIN `tabEmployee` e ON e.name = pa.parent
 		WHERE pa.parenttype = 'Employee'
 		  AND pa.project = %s
 		  AND e.status = 'Active'
-		  AND {labour_condition}
+		  AND e.is_labour = 1
 		""",
 		(project,),
 	)

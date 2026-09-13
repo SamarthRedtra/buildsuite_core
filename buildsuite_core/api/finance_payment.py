@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Infraholic Innovations Pvt. Ltd and contributors
 # For license information, please see license.txt
 
-"""Project Finance › Payments — a unified register of party payments over ERPNext Payment
+"""Project Finance > Payments — a unified register of party payments over ERPNext Payment
 Entries. Every invoice receipt, customer/supplier/subcontractor advance, bill payment and
 subcontractor payment IS a Payment Entry; this classifies each by direction (money in/out) and
 a friendly movement type, and cancels (reverses) one on request. Petty-cash disbursements are
@@ -29,11 +29,17 @@ def _classify(pe, refs, sub_suppliers):
 	ref_name = refs[0].reference_name if refs else None
 
 	if pe.payment_type == "Receive":
-		movement = "Invoice receipt" if allocated > 0.01 else "Customer advance"
+		movement = (
+			"PDC clearance"
+			if pe.get("is_pdc_entry")
+			else ("Invoice receipt" if allocated > 0.01 else "Customer advance")
+		)
 		return movement, "in", pe.paid_to, ref_name
 
 	# Pay
 	if allocated > 0.01:
+		if pe.get("is_pdc_entry"):
+			return "PDC clearance", "out", pe.paid_from, pe.post_dated_cheque or ref_name
 		pi_ref = next((r.reference_name for r in refs if r.reference_doctype == PI), None)
 		sub_bill = frappe.db.get_value(PI, pi_ref, "subcontractor_bill") if pi_ref else None
 		if sub_bill:
@@ -67,6 +73,8 @@ def list_payments(company: str | None = None):
 			"paid_to",
 			"mode_of_payment",
 			"reference_no",
+			"is_pdc_entry",
+			"post_dated_cheque",
 		],
 		order_by="posting_date desc, creation desc",
 	)
@@ -98,6 +106,7 @@ def list_payments(company: str | None = None):
 				"mode_of_payment": p.mode_of_payment,
 				"reference_no": p.reference_no,
 				"ref": ref_name,
+				"post_dated_cheque": p.post_dated_cheque,
 			}
 		)
 	return out

@@ -10,6 +10,11 @@ on page load; a Query Report's %(project)s would crash). Project is required."""
 import frappe
 from frappe import _
 
+from buildsuite_core.utils.invoice_finance import (
+	available_invoice_finance_fields,
+	invoice_finance_sql_field,
+)
+
 
 def execute(filters=None):
 	filters = frappe._dict(filters or {})
@@ -26,6 +31,7 @@ def execute(filters=None):
 		{"label": _("Measured Qty"), "fieldname": "measured", "fieldtype": "Float", "width": 110},
 		{"label": _("Billed"), "fieldname": "billed", "fieldtype": "Currency", "width": 110},
 		{"label": _("Retention"), "fieldname": "retention", "fieldtype": "Currency", "width": 110},
+		{"label": _("Advance"), "fieldname": "advance", "fieldtype": "Currency", "width": 110},
 		{"label": _("Paid"), "fieldname": "paid", "fieldtype": "Currency", "width": 110},
 		{"label": _("Outstanding"), "fieldname": "outstanding", "fieldtype": "Currency", "width": 110},
 	]
@@ -34,30 +40,43 @@ def execute(filters=None):
 
 	# Optional Subcontractor filter — narrow to one subcontractor across all three legs.
 	sub_cond = " AND x.subcontractor = %(subcontractor)s" if filters.get("subcontractor") else ""
+	pi_fields = set(available_invoice_finance_fields("Purchase Invoice"))
+	retention_field = invoice_finance_sql_field(
+		"retention_outstanding_amount", pi_fields, "pi", missing="NULL"
+	)
+	advance_field = invoice_finance_sql_field("total_advance", pi_fields, "pi")
 
 	data = frappe.db.sql(
-		"""
+		f"""
 		SELECT subcontractor, MAX(subcontractor_name) AS subcontractor_name,
 			SUM(wo_value) AS wo_value, SUM(measured) AS measured, SUM(billed) AS billed,
-			SUM(retention) AS retention, SUM(paid) AS paid, SUM(billed) - SUM(paid) AS outstanding
+			SUM(retention) AS retention, SUM(advance) AS advance, SUM(paid) AS paid,
+			SUM(outstanding) AS outstanding
 		FROM (
 			SELECT wo.subcontractor, wo.subcontractor_name, wo.total_value AS wo_value,
-				0 measured, 0 billed, 0 retention, 0 paid
+				0 measured, 0 billed, 0 retention, 0 advance, 0 paid, 0 outstanding
 				FROM `tabSubcontractor Work Order` wo
 				WHERE wo.docstatus = 1 AND wo.project = %(project)s
 			UNION ALL
-			SELECT wo.subcontractor, wo.subcontractor_name, 0, mb.measured_total, 0, 0, 0
+			SELECT wo.subcontractor, wo.subcontractor_name, 0, mb.measured_total, 0, 0, 0, 0, 0
 				FROM `tabMeasurement Book` mb
 				JOIN `tabSubcontractor Work Order` wo ON wo.name = mb.work_order
 				WHERE mb.status = 'Certified' AND mb.project = %(project)s
 			UNION ALL
-			SELECT sb.subcontractor, sb.subcontractor_name, 0, 0, sb.gross, sb.retention_amount,
-				IFNULL((SELECT pi.grand_total - pi.outstanding_amount FROM `tabPurchase Invoice` pi
-					WHERE pi.name = sb.purchase_invoice), 0)
+			SELECT sb.subcontractor, sb.subcontractor_name, 0, 0,
+				IFNULL(pi.grand_total, sb.gross),
+				IFNULL({retention_field}, sb.retention_amount),
+				IFNULL({advance_field}, 0),
+				GREATEST(IFNULL(pi.grand_total, 0) - IFNULL({retention_field}, 0)
+					- IFNULL({advance_field}, 0) - IFNULL(pi.outstanding_amount, 0), 0),
+				IFNULL(pi.outstanding_amount, 0)
 				FROM `tabSubcontractor Bill` sb
+				LEFT JOIN `tabPurchase Invoice` pi ON pi.name = sb.purchase_invoice AND pi.docstatus = 1
 				WHERE sb.docstatus = 1 AND sb.project = %(project)s
 		) x
-		WHERE 1=1 """ + sub_cond + """
+		WHERE 1=1 """
+		+ sub_cond
+		+ """
 		GROUP BY subcontractor HAVING SUM(wo_value) + SUM(billed) > 0 ORDER BY SUM(wo_value) DESC
 		""",
 		filters,

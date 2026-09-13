@@ -126,8 +126,8 @@ const wf = computed(() => {
 	const grandDiscount = b.additional_discount_on === "Grand Total" ? discBase(grandTotal) : 0;
 	const invoiceValue = grandTotal - grandDiscount;
 	const tds = b.apply_tds ? (taxable * (Number(b.tds_rate) || 0)) / 100 : 0;
-	const retention = (taxable * (Number(b.retention_percent) || 0)) / 100;
-	const advance = Number(b.advance_recovery) || 0;
+	const retention = (invoiceValue * (Number(b.retention_percent) || 0)) / 100;
+	const advance = (invoiceValue * (Number(b.advance_recovery_percent) || 0)) / 100;
 	const netPayable = Math.max(0, invoiceValue - tds - retention - advance);
 	return {
 		gross,
@@ -182,7 +182,7 @@ async function saveBilling() {
 			additional_discount_on: b.additional_discount_on,
 			additional_discount_percentage: discType.value === "%" ? discValue.value : 0,
 			discount_amount: discType.value === "₹" ? discValue.value : 0,
-			advance_recovery: b.advance_recovery,
+			advance_recovery_percent: b.advance_recovery_percent,
 			expense_account: b.expense_account,
 			taxes: (b.taxes || []).map((t) => ({
 				charge_type: t.charge_type,
@@ -1061,14 +1061,15 @@ const accountFilters = computed(() =>
 						<div>
 							<label
 								class="block text-[10px] uppercase tracking-wider text-ink-500 font-medium mb-1"
-								>Advance recovery (₹)</label
+								>Advance recovery (%)</label
 							>
 							<input
-								v-model.number="bill.advance_recovery"
+								v-model.number="bill.advance_recovery_percent"
 								:readonly="!editable"
 								type="number"
 								min="0"
-								step="0.01"
+								max="100"
+								step="0.5"
 								class="desk-input"
 							/>
 						</div>
@@ -1085,7 +1086,7 @@ const accountFilters = computed(() =>
 								class="desk-input"
 							>
 								<option value="Normal">Normal</option>
-								<option value="Final">Final (release retention)</option>
+								<option value="Final">Final (classification only)</option>
 							</select>
 						</div>
 						<div>
@@ -1269,7 +1270,7 @@ const accountFilters = computed(() =>
 						>
 					</div>
 					<div class="text-[10px] text-ink-400 -mt-0.5 mb-0.5">
-						Held on your books, released on the final bill.
+						Held in the native retention account; release it only with a Retention Release Entry.
 					</div>
 					<div v-if="wf.advance" class="flex justify-between py-1">
 						<span class="text-ink-500">Less: Advance recovery</span

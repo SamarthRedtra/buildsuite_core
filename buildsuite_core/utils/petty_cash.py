@@ -35,13 +35,64 @@ def get_petty_cash_account(company):
 		return None
 
 	default = frappe.db.get_single_value("BuildSuite Core Settings", "default_petty_cash_account")
-	if default and frappe.db.get_value("Account", default, "company") == company:
+	if _is_postable_cash_account(default, company):
 		return default
 
+	account = frappe.db.get_value(
+		"Account",
+		{
+			"account_name": PETTY_CASH_ACCOUNT_NAME,
+			"company": company,
+			"is_group": 0,
+			"disabled": 0,
+			"account_type": ["in", ["Cash", "Bank"]],
+		},
+		"name",
+	)
+	if account:
+		return account
+
+	group = _petty_cash_group(company)
+	if not group:
+		return None
+	rows = frappe.get_all(
+		"Account",
+		filters={
+			"company": company,
+			"is_group": 0,
+			"disabled": 0,
+			"account_type": ["in", ["Cash", "Bank"]],
+			"lft": [">", group.lft],
+			"rgt": ["<", group.rgt],
+		},
+		pluck="name",
+		order_by="lft asc",
+		limit=1,
+	)
+	return rows[0] if rows else None
+
+
+def _is_postable_cash_account(account, company):
+	if not account:
+		return False
+	values = frappe.db.get_value(
+		"Account", account, ["company", "is_group", "disabled", "account_type"], as_dict=True
+	)
+	return bool(
+		values
+		and values.company == company
+		and not values.is_group
+		and not values.disabled
+		and values.account_type in ("Cash", "Bank")
+	)
+
+
+def _petty_cash_group(company):
 	return frappe.db.get_value(
 		"Account",
-		{"account_name": PETTY_CASH_ACCOUNT_NAME, "company": company, "is_group": 0},
-		"name",
+		{"account_name": PETTY_CASH_ACCOUNT_NAME, "company": company, "is_group": 1, "disabled": 0},
+		["name", "lft", "rgt"],
+		as_dict=True,
 	)
 
 
@@ -50,6 +101,21 @@ def resolve_petty_cash_account(company):
 	account = get_petty_cash_account(company)
 	if account:
 		return account
+	group = _petty_cash_group(company)
+	if group:
+		account = frappe.get_doc(
+			{
+				"doctype": "Account",
+				"account_name": "BuildSuite Petty Cash",
+				"company": company,
+				"parent_account": group.name,
+				"root_type": "Asset",
+				"account_type": "Cash",
+			}
+		)
+		account.flags.ignore_permissions = True
+		account.insert()
+		return account.name
 
 	from buildsuite_core.utils.subcontract_billing import _ensure_account
 
@@ -274,7 +340,7 @@ def _employee_context(employee):
 
 
 def _posted_balance(employee, account):
-	"""Net Dr − Cr of submitted, non-cancelled GL entries."""
+	"""Net Dr - Cr of submitted, non-cancelled GL entries."""
 	balance = frappe.db.sql(
 		"""
 		SELECT COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0)
@@ -289,7 +355,7 @@ def _posted_balance(employee, account):
 
 
 def _draft_journal_balance(employee, account):
-	"""Net Dr − Cr sitting in unsubmitted Journal Entries."""
+	"""Net Dr - Cr sitting in unsubmitted Journal Entries."""
 	balance = frappe.db.sql(
 		"""
 		SELECT COALESCE(SUM(jea.debit), 0) - COALESCE(SUM(jea.credit), 0)
@@ -310,11 +376,15 @@ def reconciled_holder_balances(company=None):
 	out (credits), balance = net in hand. Keyed on the holder Employee, so it needs the
 	disbursement / expense JEs to carry `employee` (they do).
 	"""
-	conditions = "a.account_name = %(petty)s AND gle.is_cancelled = 0 AND gle.employee IS NOT NULL AND gle.employee != ''"
-	params = {"petty": PETTY_CASH_ACCOUNT_NAME}
-	if company:
-		conditions += " AND a.company = %(company)s"
-		params["company"] = company
+	companies = [company] if company else frappe.get_all("Company", pluck="name")
+	accounts = tuple(filter(None, (get_petty_cash_account(name) for name in companies)))
+	if not accounts:
+		return []
+	conditions = (
+		"gle.account IN %(accounts)s AND gle.is_cancelled = 0 "
+		"AND gle.employee IS NOT NULL AND gle.employee != ''"
+	)
+	params = {"accounts": accounts}
 
 	rows = frappe.db.sql(
 		"""
@@ -322,7 +392,6 @@ def reconciled_holder_balances(company=None):
 			COALESCE(SUM(gle.debit), 0) AS disbursed,
 			COALESCE(SUM(gle.credit), 0) AS spent
 		FROM `tabGL Entry` gle
-		INNER JOIN `tabAccount` a ON a.name = gle.account
 		WHERE """
 		+ conditions  # server-built from hardcoded fragments; values are in `params`
 		+ """
@@ -467,7 +536,13 @@ def _fetch_display_fields(targets):
 
 
 @frappe.whitelist()
-def get_transaction_list(employee: str, transaction_type: str | None = None, project: str | None = None, from_date: str | None = None, to_date: str | None = None):
+def get_transaction_list(
+	employee: str,
+	transaction_type: str | None = None,
+	project: str | None = None,
+	from_date: str | None = None,
+	to_date: str | None = None,
+):
 	"""Petty cash ledger for an employee, newest first, with a running balance.
 
 	The running balance is accumulated across the employee's full history before the

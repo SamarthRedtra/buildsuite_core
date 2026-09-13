@@ -34,7 +34,9 @@ def previously_billed_by_line(work_order, exclude_bill=None):
 	return out
 
 
-class SubcontractorBill(Document):  # nosemgrep: frappe-modifying-but-not-comitting-other-method -- validate() helpers set self.* fields, persisted by the normal save (db_set not appropriate in validate)
+class SubcontractorBill(
+	Document
+):  # nosemgrep: frappe-modifying-but-not-comitting-other-method -- validate() helpers set self.* fields, persisted by the normal save (db_set not appropriate in validate)
 	def validate(self):
 		self._sync_from_work_order()
 		if self.work_order and not self.is_direct:
@@ -93,12 +95,38 @@ class SubcontractorBill(Document):  # nosemgrep: frappe-modifying-but-not-comitt
 			frappe.throw(_("Nothing to bill: this period's value is zero."))
 		if not self.subcontractor:
 			frappe.throw(_("A subcontractor is required."))
+		for label, value in (
+			(_("Retention"), self.retention_percent),
+			(_("Advance Recovery"), self.advance_recovery_percent),
+		):
+			if flt(value) < 0 or flt(value) > 100:
+				frappe.throw(_("{0} percentage must be between 0 and 100.").format(label))
 
 	def on_submit(self):
 		from buildsuite_core.utils.subcontract_billing import generate_purchase_invoice
 
 		self.purchase_invoice = generate_purchase_invoice(self)
 		self.db_set("purchase_invoice", self.purchase_invoice)
+		pi = frappe.db.get_value(
+			"Purchase Invoice",
+			self.purchase_invoice,
+			["retention_amount", "total_advance", "outstanding_amount"],
+			as_dict=True,
+		)
+		if pi:
+			self.retention_amount = flt(pi.retention_amount)
+			self.advance_recovery = flt(pi.total_advance)
+			self.net_payable = flt(pi.outstanding_amount)
+			frappe.db.set_value(
+				self.doctype,
+				self.name,
+				{
+					"retention_amount": self.retention_amount,
+					"advance_recovery": self.advance_recovery,
+					"net_payable": self.net_payable,
+				},
+				update_modified=False,
+			)
 		self._sync_status()
 
 	def before_cancel(self):
@@ -151,6 +179,15 @@ class SubcontractorBill(Document):  # nosemgrep: frappe-modifying-but-not-comitt
 		# could have drifted.
 		if self.project:
 			self.company = frappe.db.get_value("Project", self.project, "company")
+			if not flt(self.advance_recovery_percent):
+				project_terms = frappe.db.get_value(
+					"Project",
+					self.project,
+					["enable_advance_recovery", "advance_recovery_percentage"],
+					as_dict=True,
+				)
+				if project_terms and project_terms.enable_advance_recovery:
+					self.advance_recovery_percent = project_terms.advance_recovery_percentage
 
 	def _require_submitted_work_order(self):
 		# The Work Order is natively submittable now — only a SUBMITTED WO is a committed
@@ -199,11 +236,10 @@ class SubcontractorBill(Document):  # nosemgrep: frappe-modifying-but-not-comitt
 		self.tds_rate = rate
 
 	def _compute_totals(self):
-		"""The prototype waterfall: gross → (net discount) → taxable → +taxes → grand total
-		→ (grand discount) → invoice value → −tds −retention −advance → net payable."""
+		"""Preview the native invoice waterfall using VAT-inclusive retention/recovery bases."""
 		gross = 0.0
 		for row in self.lines:
-			# WO lines carry qty×rate; direct lines carry a typed amount only.
+			# WO lines carry qty x rate; direct lines carry a typed amount only.
 			if flt(row.this_period_qty) and flt(row.rate):
 				row.this_period_amount = flt(row.this_period_qty) * flt(row.rate)
 			gross += flt(row.this_period_amount)
@@ -231,7 +267,8 @@ class SubcontractorBill(Document):  # nosemgrep: frappe-modifying-but-not-comitt
 		self.invoice_value = max(0.0, flt(self.grand_total) - grand_discount)
 
 		self.tds_amount = flt(self.taxable_value) * flt(self.tds_rate) / 100.0 if self.apply_tds else 0.0
-		self.retention_amount = flt(self.taxable_value) * flt(self.retention_percent) / 100.0
+		self.retention_amount = flt(self.invoice_value) * flt(self.retention_percent) / 100.0
+		self.advance_recovery = flt(self.invoice_value) * flt(self.advance_recovery_percent) / 100.0
 		self.net_payable = max(
 			0.0,
 			flt(self.invoice_value)
@@ -251,8 +288,10 @@ class SubcontractorBill(Document):  # nosemgrep: frappe-modifying-but-not-comitt
 			return
 		doc = frappe.get_doc("Purchase Invoice", self.purchase_invoice)
 		if doc.docstatus == 1:
-			paid = flt(doc.grand_total) - flt(doc.outstanding_amount)
-			if paid > 0:
+			settled = (
+				flt(doc.grand_total) - flt(doc.retention_outstanding_amount) - flt(doc.outstanding_amount)
+			)
+			if settled > 0:
 				frappe.throw(
 					_(
 						"This bill's Purchase Invoice has payments against it. Cancel the Payment Entries first."

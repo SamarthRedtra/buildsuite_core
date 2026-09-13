@@ -89,6 +89,8 @@ def _current_boq(project_names):
 
 
 def _sum(doctype, filters, field):
+	if not frappe.db.has_column(doctype, field):
+		return 0.0
 	from frappe.query_builder.functions import Sum
 
 	dt = frappe.qb.DocType(doctype)
@@ -288,7 +290,7 @@ def get_project_dashboard(project: str | None = None):
 	# --- commitments ---
 	committed = _sum("Subcontractor Work Order", {**proj_in, "docstatus": 1}, "total_value")
 	billed = _sum("Subcontractor Bill", {**proj_in, "docstatus": 1}, "gross")
-	retention = _sum("Subcontractor Bill", {**proj_in, "docstatus": 1}, "retention_amount")
+	retention = _sum("Purchase Invoice", {**proj_in, "docstatus": 1}, "retention_outstanding_amount")
 	pos = frappe.get_all(
 		"Purchase Order",
 		filters={

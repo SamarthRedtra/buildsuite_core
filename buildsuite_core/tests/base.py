@@ -16,7 +16,9 @@ from frappe.utils import today
 
 
 def get_default_company():
-	return frappe.db.get_value("Company", {}, "name")
+	from buildsuite_core.utils.project import default_company
+
+	return default_company()
 
 
 class BuildSuiteTestCase(UnitTestCase):

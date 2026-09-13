@@ -1,10 +1,11 @@
 # Copyright (c) 2026, Infraholic Innovations Pvt. Ltd and contributors
 # For license information, please see license.txt
 
-"""Project Finance › Invoices — the Vue front-end over ERPNext Sales Invoice: create a draft,
+"""Project Finance > Invoices — the Vue front-end over ERPNext Sales Invoice: create a draft,
 submit, and receive a payment into a Bank/Cash account."""
 
 import json
+from unittest.mock import patch
 
 import frappe
 from frappe.utils import flt
@@ -38,6 +39,38 @@ class TestInvoice(BuildSuiteTestCase):
 		from buildsuite_core.utils.subcontract_billing import _ensure_account
 
 		return _ensure_account(self.company, "Cash", "Asset", "Cash", "Current Assets")
+
+	def test_finance_summary_keeps_retention_and_advances_out_of_cash(self):
+		from buildsuite_core.utils.invoice_finance import invoice_finance_summary
+
+		summary = invoice_finance_summary(
+			frappe._dict(
+				{
+					"docstatus": 1,
+					"grand_total": 105000,
+					"retention_amount": 10500,
+					"retention_outstanding_amount": 10500,
+					"advance_recovery_amount": 21000,
+					"outstanding_amount": 53500,
+				}
+			),
+			advance_adjusted=20000,
+			cash_key="received",
+		)
+		self.assertEqual(summary["gross_total"], 105000)
+		self.assertEqual(summary["retention_outstanding"], 10500)
+		self.assertEqual(summary["advance_adjusted"], 20000)
+		self.assertEqual(summary["cash_settled"], 21000)
+		self.assertEqual(summary["received"], 21000)
+		self.assertEqual(summary["amount_due_now"], 53500)
+
+	def test_pdc_summary_tolerates_unsynchronised_presented_on_column(self):
+		from buildsuite_core.utils.invoice_finance import invoice_pdc_summary
+
+		with patch.object(frappe.db, "get_table_columns", return_value=[]):
+			summary = invoice_pdc_summary("Sales Invoice", "missing-invoice")
+		self.assertEqual(summary["rows"], [])
+		self.assertEqual(summary["active_allocated"], 0)
 
 	def test_create_submit_receive(self):
 		from buildsuite_core.api.invoice import (
@@ -122,7 +155,7 @@ class TestInvoice(BuildSuiteTestCase):
 			)
 		)
 		si = frappe.get_doc("Sales Invoice", res["name"])
-		# 100000 − 5% = 95000 net; +10% tax = 9500 → 104500.
+		# 100000 - 5% = 95000 net; +10% tax = 9500 -> 104500.
 		self.assertAlmostEqual(flt(si.grand_total), 104500, places=2)
 		self.assertEqual(len(si.taxes), 1)
 		self.assertEqual(si.apply_discount_on, "Net Total")
@@ -540,7 +573,12 @@ class TestInvoice(BuildSuiteTestCase):
 				"title": f"UAT Template {self._n}",
 				"company": self.company,
 				"taxes": [
-					{"charge_type": "On Net Total", "account_head": income_tax, "description": "Tax", "rate": 8}
+					{
+						"charge_type": "On Net Total",
+						"account_head": income_tax,
+						"description": "Tax",
+						"rate": 8,
+					}
 				],
 			}
 		).insert(ignore_permissions=True)
@@ -765,9 +803,9 @@ class TestInvoice(BuildSuiteTestCase):
 		cust_a = self._customer()
 		cust_b = self._customer()
 		cash = self._deposit_account()
-		pe_a = record_advance(cust_a, amount=8000, date="2026-07-20", deposit_to=cash, mode_of_payment="Cash")[
-			"payment_entry"
-		]
+		pe_a = record_advance(
+			cust_a, amount=8000, date="2026-07-20", deposit_to=cash, mode_of_payment="Cash"
+		)["payment_entry"]
 		record_advance(cust_b, amount=9000, date="2026-07-20", deposit_to=cash, mode_of_payment="Cash")
 		name = self._draft_invoice(cust_a, rate=1000)
 		names = [a["payment_entry"] for a in available_advances(name)]

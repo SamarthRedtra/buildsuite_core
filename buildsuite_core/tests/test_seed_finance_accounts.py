@@ -15,10 +15,10 @@ from buildsuite_core.tests.base import BuildSuiteTestCase
 class TestSeedFinanceAccounts(BuildSuiteTestCase):
 	def test_seed_company_accounts_creates_ledgers(self):
 		from buildsuite_core.install import seed_company_accounts
+		from buildsuite_core.utils.petty_cash import resolve_petty_cash_account
 
 		seed_company_accounts(self.company)
 		expected = {
-			"Petty Cash": ("Asset", "Cash"),
 			"Petty Cash Advances": ("Asset", ""),
 			"Reimbursements Payable": ("Liability", ""),
 			"Retention Payable": ("Liability", ""),
@@ -36,17 +36,36 @@ class TestSeedFinanceAccounts(BuildSuiteTestCase):
 			self.assertIsNotNone(acc, f"{name} was not seeded")
 			self.assertEqual(acc.root_type, root_type, name)
 			self.assertEqual(acc.account_type or "", account_type, name)
+		petty = frappe.db.get_value(
+			"Account",
+			resolve_petty_cash_account(self.company),
+			["root_type", "account_type", "is_group"],
+			as_dict=True,
+		)
+		self.assertEqual(petty.root_type, "Asset")
+		self.assertIn(petty.account_type, ("Cash", "Bank"))
+		self.assertFalse(petty.is_group)
 
 	def test_seeding_is_idempotent(self):
 		from buildsuite_core.install import seed_company_accounts
+		from buildsuite_core.utils.petty_cash import resolve_petty_cash_account
 
 		seed_company_accounts(self.company)
 		seed_company_accounts(self.company)  # a second pass must not duplicate
-		for name in ("Retention Payable", "Plant Recovery", "Petty Cash"):
+		for name in ("Retention Payable", "Plant Recovery"):
 			rows = frappe.get_all(
 				"Account", filters={"account_name": name, "company": self.company, "is_group": 0}
 			)
 			self.assertEqual(len(rows), 1, f"{name} duplicated")
+		petty = frappe.db.get_value(
+			"Account",
+			resolve_petty_cash_account(self.company),
+			["company", "is_group", "account_type"],
+			as_dict=True,
+		)
+		self.assertEqual(petty.company, self.company)
+		self.assertFalse(petty.is_group)
+		self.assertIn(petty.account_type, ("Cash", "Bank"))
 
 	def test_default_petty_cash_account_is_seeded(self):
 		from buildsuite_core.install import seed_finance_accounts
@@ -55,7 +74,9 @@ class TestSeedFinanceAccounts(BuildSuiteTestCase):
 		seed_finance_accounts()
 		value = frappe.db.get_single_value("BuildSuite Core Settings", "default_petty_cash_account")
 		self.assertTrue(value)
-		self.assertEqual(frappe.db.get_value("Account", value, "account_name"), "Petty Cash")
+		account = frappe.db.get_value("Account", value, ["company", "is_group", "account_type"], as_dict=True)
+		self.assertFalse(account.is_group)
+		self.assertIn(account.account_type, ("Cash", "Bank"))
 
 	def test_petty_cash_account_setting_round_trip(self):
 		# The setting keys off the BuildSuite default company, so seed + assert against it.

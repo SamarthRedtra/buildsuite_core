@@ -141,7 +141,7 @@ def save_work_order(
 	project: str | None = None,
 	date: str | None = None,
 	delivery_type: str | None = None,
-	retention_percent: str | None = None,
+	retention_percent: float | str | None = None,
 	terms_template: str | None = None,
 	terms: str | None = None,
 	lines: str | None = None,
@@ -523,7 +523,7 @@ def get_wo_measurements(work_order: str):
 # phone / email live on its native Contact (via utils.party). These endpoints own the
 # join so the Vue master screens read/write all of it in one call.
 # ---------------------------------------------------------------------------
-from buildsuite_core.utils.party import primary_contact, upsert_primary_contact  # noqa: E402
+from buildsuite_core.utils.party import primary_contact, upsert_primary_contact
 
 SUBCONTRACTOR_TYPE = "Subcontractor"
 

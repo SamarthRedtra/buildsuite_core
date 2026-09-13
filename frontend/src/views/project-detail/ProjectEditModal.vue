@@ -174,6 +174,33 @@ function onCustomerCreated(name) {
 							 not manually editable, so status and progress stay decoupled. -->
 					</DeskSection>
 
+					<DeskSection title="Commercial terms">
+						<DeskField label="Retention">
+							<label class="inline-flex items-center gap-2 cursor-pointer select-none">
+								<input type="checkbox" v-model="editForm.enableRetention" class="accent-brand-600" />
+								<span class="text-sm text-ink-700">Enable retention</span>
+							</label>
+						</DeskField>
+						<DeskField v-if="editForm.enableRetention" label="Retention %">
+							<DeskInput v-model.number="editForm.retentionPercentage" type="number" min="0" max="99.99" />
+						</DeskField>
+						<DeskField v-if="editForm.enableRetention" label="Retention release date">
+							<DeskInput v-model="editForm.retentionReleaseDate" type="date" />
+						</DeskField>
+						<DeskField v-if="editForm.enableRetention" label="Release after days">
+							<DeskInput v-model.number="editForm.retentionReleaseAfterDays" type="number" min="0" />
+						</DeskField>
+						<DeskField label="Advance recovery">
+							<label class="inline-flex items-center gap-2 cursor-pointer select-none">
+								<input type="checkbox" v-model="editForm.enableAdvanceRecovery" class="accent-brand-600" />
+								<span class="text-sm text-ink-700">Enable advance recovery</span>
+							</label>
+						</DeskField>
+						<DeskField v-if="editForm.enableAdvanceRecovery" label="Advance recovery %">
+							<DeskInput v-model.number="editForm.advanceRecoveryPercentage" type="number" min="0" max="100" />
+						</DeskField>
+					</DeskSection>
+
 					<DeskSection title="Team & status">
 						<DeskField label="Project Manager" :error="errors.pm">
 							<DeskLinkPicker

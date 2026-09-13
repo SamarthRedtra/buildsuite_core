@@ -110,6 +110,12 @@ function loadProjectResource() {
 			"location",
 			"is_group",
 			"notes",
+			"enable_retention",
+			"retention_percentage",
+			"retention_release_date",
+			"retention_release_after_days",
+			"enable_advance_recovery",
+			"advance_recovery_percentage",
 			"creation",
 			"modified",
 			"parent_project",
@@ -135,6 +141,12 @@ function loadProjectResource() {
 				description: row?.notes || row?.description || "",
 				isGroup: Number(row?.is_group ?? (row?.parent_project ? 0 : 1)) === 1,
 				parentId: row?.parent_project || null,
+				enableRetention: Number(row?.enable_retention) === 1,
+				retentionPercentage: Number(row?.retention_percentage) || 0,
+				retentionReleaseDate: row?.retention_release_date || "",
+				retentionReleaseAfterDays: Number(row?.retention_release_after_days) || 0,
+				enableAdvanceRecovery: Number(row?.enable_advance_recovery) === 1,
+				advanceRecoveryPercentage: Number(row?.advance_recovery_percentage) || 0,
 				createdAt: row?.creation || null,
 				// custom_team_members (Project Team child rows) ride along on the
 				// frappe.client.get document even though they're not in `fields`.
@@ -828,6 +840,21 @@ async function saveEdit() {
 			estimated_costing: Number(editForm.value.budget),
 			project_manager: editForm.value.pm || null,
 			notes: editForm.value.description,
+			enable_retention: editForm.value.enableRetention ? 1 : 0,
+			retention_percentage: editForm.value.enableRetention
+				? Number(editForm.value.retentionPercentage) || 0
+				: 0,
+			retention_release_date:
+				editForm.value.enableRetention && editForm.value.retentionReleaseDate
+					? editForm.value.retentionReleaseDate
+					: null,
+			retention_release_after_days: editForm.value.enableRetention
+				? Number(editForm.value.retentionReleaseAfterDays) || 0
+				: 0,
+			enable_advance_recovery: editForm.value.enableAdvanceRecovery ? 1 : 0,
+			advance_recovery_percentage: editForm.value.enableAdvanceRecovery
+				? Number(editForm.value.advanceRecoveryPercentage) || 0
+				: 0,
 		});
 		editing.value = false;
 		projectResource.value?.reload?.();

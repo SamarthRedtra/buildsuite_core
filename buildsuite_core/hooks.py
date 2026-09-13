@@ -157,11 +157,11 @@ has_permission = {
 	"Scope Change Order": "buildsuite_core.permissions.sco.has_sco_permission",
 }
 
-# Override the Project controller so its record name honours the BuildSuite Core
-# Settings "Project Naming" option (Project ID vs an ERPNext naming series), and the
-# Task controller so it never auto-fills the end date from expected_time.
+# Project and Task carry BuildSuite scheduling rules. Stock Entry retains ERPNext's
+# posting lifecycle while adding the balanced Item Conversion / Dismantling handler.
 override_doctype_class = {  # nosemgrep: override-doctype-class -- intentional, documented Project/Task controller overrides
 	"Project": "buildsuite_core.overrides.project.BuildSuiteProject",
+	"Stock Entry": "buildsuite_core.overrides.stock_entry.BuildSuiteStockEntry",
 	"Task": "buildsuite_core.overrides.task.BuildSuiteTask",
 }
 
@@ -174,14 +174,10 @@ doc_events = {
 	# 	"validate": "buildsuite_core.utils.project.create_warehouse_for_project",
 	# 	"on_trash": "buildsuite_core.utils.project.delete_warehouse_for_project"
 	# },
-    "Purchase Receipt": {
-        "on_update":"buildsuite_core.utils.purchase_receipt.create_remarks"
-    },
+	"Purchase Receipt": {"on_update": "buildsuite_core.utils.purchase_receipt.create_remarks"},
 	# Reference No is optional in BuildSuite (SPA + mobile); default it for a bank Payment
 	# Entry so no path (advance / receipt / bill payment) hits ERPNext's mandatory check.
-	"Payment Entry": {
-		"before_validate": "buildsuite_core.utils.payment.default_bank_reference"
-	},
+	"Payment Entry": {"before_validate": "buildsuite_core.utils.payment.default_bank_reference"},
 	# ERPNext auto-creates a self-service User Permission (own Employee only) when a user is linked
 	# to their Employee. For a roster-managing persona that wrongly hides every OTHER employee
 	# (empty field-employee list, 403 on any other worker) — drop it so access matches the matrix.
@@ -239,8 +235,8 @@ doc_events = {
 			"buildsuite_core.utils.task.sync_stage_tasks_on_delete",
 		],
 	},
-	"Company":{
-		"on_update":"buildsuite_core.utils.petty_cash.create_account",
+	"Company": {
+		"on_update": "buildsuite_core.utils.petty_cash.create_account",
 	},
 	# Direct-in-Desk petty cash disbursement: a Journal Entry linked to a Petty Cash Request
 	# (the `petty_cash_request` field) disburses it on submit / reverts on cancel, and carries
@@ -403,15 +399,15 @@ fixtures = [
 
 # include js in doctype views
 doctype_js = {
-    "Project": "public/js/project.js",
-    "Task": "public/js/task.js",
-    "Stock Entry":"public/js/stock_entry.js",
-    "Material Request": "public/js/material_request.js",
-    "Purchase Order": "public/js/purchase_order.js",
-    "Purchase Invoice": "public/js/purchase_invoice.js",
-    "Purchase Receipt": "public/js/purchase_receipt.js",
-    "Journal Entry": "public/js/journal_entry.js",
-    "Petty Cash Request": "public/js/petty_cash_request.js",
+	"Project": "public/js/project.js",
+	"Task": "public/js/task.js",
+	"Stock Entry": "public/js/stock_entry.js",
+	"Material Request": "public/js/material_request.js",
+	"Purchase Order": "public/js/purchase_order.js",
+	"Purchase Invoice": "public/js/purchase_invoice.js",
+	"Purchase Receipt": "public/js/purchase_receipt.js",
+	"Journal Entry": "public/js/journal_entry.js",
+	"Petty Cash Request": "public/js/petty_cash_request.js",
 }
 
 doctype_list_js = {"Task": "public/js/task_list.js"}

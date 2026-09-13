@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Infraholic Innovations Pvt. Ltd and contributors
 # For license information, please see license.txt
 
-"""Whitelisted endpoints for Project Finance › Invoices — the Vue front-end over ERPNext's
+"""Whitelisted endpoints for Project Finance > Invoices — the Vue front-end over ERPNext's
 Sales Invoice (money in). An "invoice" IS a Sales Invoice: these endpoints create drafts,
 list them with aging, submit/cancel, and receive payments (a real Payment Entry against the
 SI). Single-company for now — the company is the project's, else the default (see the
@@ -11,6 +11,12 @@ import frappe
 from frappe import _
 from frappe.utils import flt, nowdate
 
+from buildsuite_core.utils.invoice_finance import (
+	available_invoice_finance_fields,
+	invoice_finance_summary,
+	invoice_pdc_summary,
+	invoice_retention_releases,
+)
 from buildsuite_core.utils.project import default_company
 
 SI = "Sales Invoice"
@@ -63,23 +69,11 @@ def _income_account(company):
 
 
 def _payment_summary(name):
-	si = frappe.db.get_value(
-		SI, name, ["grand_total", "outstanding_amount", "status", "docstatus"], as_dict=True
-	)
-	if not si or si.docstatus == 0:
-		return {"invoiced": 0, "received": 0, "outstanding": 0, "status": "Draft"}
-	invoiced = flt(si.grand_total)
-	outstanding = flt(si.outstanding_amount)
-	received = invoiced - outstanding
-	if si.docstatus == 2:
-		status = "Cancelled"
-	elif outstanding <= 0.01 and invoiced > 0:
-		status = "Paid"
-	elif received > 0.01:
-		status = "Partly Paid"
-	else:
-		status = "Unpaid"
-	return {"invoiced": invoiced, "received": received, "outstanding": outstanding, "status": status}
+	if not frappe.db.exists(SI, name):
+		return invoice_finance_summary(frappe._dict(), cash_key="received")
+	doc = frappe.get_doc(SI, name)
+	adjusted = sum(row["allocated"] for row in _linked_advances(doc))
+	return invoice_finance_summary(doc, advance_adjusted=adjusted, cash_key="received")
 
 
 def _ref_is_advance(pe_type, paid_amount, unallocated, allocated):
@@ -149,12 +143,7 @@ def _linked_advances(doc):
 def _serialize(doc):
 	advances = _linked_advances(doc)
 	adjusted = sum(a["allocated"] for a in advances)
-	pay = _payment_summary(doc.name)
-	# Advance adjustment settles the receivable but is not a cash receipt — split it out of
-	# "Received" so the totals read the way the prototype shows them.
-	pay["advance_adjusted"] = adjusted
-	if doc.docstatus == 1:
-		pay["received"] = max(flt(pay["received"]) - adjusted, 0)
+	pay = invoice_finance_summary(doc, advance_adjusted=adjusted, cash_key="received")
 	return {
 		"name": doc.name,
 		"customer": doc.customer,
@@ -175,9 +164,23 @@ def _serialize(doc):
 		"net_total": doc.net_total,
 		"total_taxes_and_charges": doc.total_taxes_and_charges,
 		"grand_total": doc.grand_total,
+		"enable_retention": doc.get("enable_retention"),
+		"retention_percentage": flt(doc.get("retention_percentage")),
+		"retention_account": doc.get("retention_account"),
+		"retention_release_date": doc.get("retention_release_date"),
+		"retention_amount": flt(doc.get("retention_amount")),
+		"retention_released_amount": flt(doc.get("retention_released_amount")),
+		"retention_outstanding_amount": flt(doc.get("retention_outstanding_amount")),
+		"enable_advance_recovery": doc.get("enable_advance_recovery"),
+		"advance_recovery_percentage": flt(doc.get("advance_recovery_percentage")),
+		"advance_recovery_amount": flt(doc.get("advance_recovery_amount")),
+		"allocate_advances_automatically": doc.get("allocate_advances_automatically"),
 		"total_advance": flt(doc.get("total_advance")),
 		"advance_adjusted": adjusted,
 		"advances": advances,
+		"finance": pay,
+		"pdc": invoice_pdc_summary(SI, doc.name) if doc.name else {"rows": []},
+		"retention_releases": invoice_retention_releases(SI, doc.name),
 		"items": [
 			{"description": r.description, "qty": r.qty, "rate": r.rate, "amount": r.amount}
 			for r in doc.items
@@ -219,6 +222,7 @@ def list_invoices(project: str | None = None, company: str | None = None):
 			"due_date",
 			"grand_total",
 			"outstanding_amount",
+			*available_invoice_finance_fields(SI),
 			"status",
 			"docstatus",
 		],
@@ -238,18 +242,7 @@ def list_invoices(project: str | None = None, company: str | None = None):
 	)
 	out = []
 	for r in rows:
-		invoiced = flt(r.grand_total)
-		outstanding = flt(r.outstanding_amount) if r.docstatus == 1 else invoiced
-		if r.docstatus == 0:
-			pay_status = "Draft"
-		elif r.docstatus == 2:
-			pay_status = "Cancelled"
-		elif outstanding <= 0.01 and invoiced > 0:
-			pay_status = "Paid"
-		elif invoiced - outstanding > 0.01:
-			pay_status = "Partly Paid"
-		else:
-			pay_status = "Unpaid"
+		pay = invoice_finance_summary(r, advance_adjusted=r.get("total_advance"), cash_key="received")
 		out.append(
 			{
 				"name": r.name,
@@ -259,10 +252,13 @@ def list_invoices(project: str | None = None, company: str | None = None):
 				"project_name": pnames.get(r.project) or r.project,
 				"date": str(r.posting_date) if r.posting_date else None,
 				"due_date": str(r.due_date) if r.due_date else None,
-				"total": invoiced,
-				"outstanding": outstanding if r.docstatus == 1 else 0,
+				"total": pay["gross_total"],
+				"outstanding": pay["amount_due_now"],
+				"retention": pay["retention_outstanding"],
+				"advance_adjusted": pay["advance_adjusted"],
+				"cash_received": pay["cash_settled"],
 				"docstatus": r.docstatus,
-				"status": pay_status,
+				"status": pay["status"],
 			}
 		)
 	return out
@@ -314,6 +310,19 @@ def save_invoice(payload: str):
 	si.posting_date = data.get("date") or nowdate()
 	si.due_date = data.get("due_date") or si.posting_date
 	si.project = project or None
+	for fieldname in (
+		"enable_retention",
+		"retention_percentage",
+		"retention_account",
+		"retention_release_date",
+		"enable_advance_recovery",
+		"advance_recovery_percentage",
+		"allocate_advances_automatically",
+	):
+		if fieldname in data:
+			si.set(fieldname, data.get(fieldname))
+	if data.get("enable_advance_recovery"):
+		si.allocate_advances_automatically = 1
 
 	item_code = ensure_invoice_item()
 	income = _income_account(company)
@@ -418,7 +427,14 @@ def delete_invoice(name: str):
 # Receive payment (Payment Entry against the SI)
 # --------------------------------------------------------------------------- #
 @frappe.whitelist()
-def record_receipt(name: str, amount: str | float | None = None, date: str | None = None, mode_of_payment: str | None = None, deposit_to: str | None = None, reference_no: str | None = None):
+def record_receipt(
+	name: str,
+	amount: str | float | None = None,
+	date: str | None = None,
+	mode_of_payment: str | None = None,
+	deposit_to: str | None = None,
+	reference_no: str | None = None,
+):
 	"""Create + submit a Payment Entry receiving against the invoice, into a Bank/Cash account."""
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 
@@ -487,7 +503,14 @@ def list_receipts(name: str):
 # Customer advances (on-account receipts, no invoice yet)
 # --------------------------------------------------------------------------- #
 @frappe.whitelist()
-def record_advance(customer: str, amount: str | float, date: str | None = None, deposit_to: str | None = None, mode_of_payment: str | None = None, reference_no: str | None = None):
+def record_advance(
+	customer: str,
+	amount: str | float,
+	date: str | None = None,
+	deposit_to: str | None = None,
+	mode_of_payment: str | None = None,
+	reference_no: str | None = None,
+):
 	"""Receive money from a customer BEFORE (or without) an invoice — a submitted on-account
 	Payment Entry whose full amount stays unallocated until a later invoice draws it down."""
 	from erpnext.accounts.party import get_party_account
@@ -637,6 +660,15 @@ def link_advance(name: str, payment_entry: str, amount: str | float):
 	amount = flt(amount)
 	if amount <= 0:
 		frappe.throw(_("Enter an allocation greater than zero."))
+	current_adjusted = sum(row["allocated"] for row in _linked_advances(si))
+	recovery_limit = flt(si.get("advance_recovery_amount"))
+	if si.get("enable_advance_recovery") and current_adjusted + amount > recovery_limit + 0.01:
+		frappe.throw(
+			_("Advance recovery is capped at {0}; {1} is already adjusted.").format(
+				frappe.format_value(recovery_limit, "Currency"),
+				frappe.format_value(current_adjusted, "Currency"),
+			)
+		)
 
 	pe = frappe.get_doc(PE, payment_entry)
 	if pe.docstatus != 1 or pe.payment_type != "Receive" or pe.party != si.customer:

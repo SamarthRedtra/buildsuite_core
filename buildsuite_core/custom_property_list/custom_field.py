@@ -16,6 +16,18 @@ CUSTOM_FIELD = {
 			"module": "BuildSuite Core",
 		},
 	],
+	"Sales Order": [
+		{
+			"fieldname": "custom_buildsuite_boq",
+			"fieldtype": "Link",
+			"label": "BuildSuite BOQ",
+			"options": "BOQ",
+			"insert_after": "project",
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "BuildSuite Core",
+		},
+	],
 	"Project": [
 		{
 			"fieldname": "custom_project_id",
@@ -370,7 +382,17 @@ CUSTOM_FIELD = {
 			"in_standard_filter": 1,
 			"reqd": 1,
 			"read_only": 0,
-		}
+		},
+		{
+			"fieldname": "custom_buildsuite_boq",
+			"fieldtype": "Link",
+			"label": "BuildSuite BOQ",
+			"options": "BOQ",
+			"insert_after": "project",
+			"read_only": 1,
+			"no_copy": 1,
+			"module": "BuildSuite Core",
+		},
 	],
 	"Item": [
 		{
