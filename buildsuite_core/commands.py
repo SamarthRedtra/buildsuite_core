@@ -93,4 +93,41 @@ def import_salary_sheet(site, workbook_path, apply_changes=False, allow_producti
 		frappe.destroy()
 
 
-commands = [change_app_route, retire_legacy_apps, import_salary_sheet]
+@click.command("buildsuite-import-waterproofing-project")
+@click.option("--site", required=True, help="Site to inspect or import into")
+@click.option("--file", "workbook_path", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--apply", "apply_changes", is_flag=True, help="Apply the validated import atomically")
+@click.option("--allow-production", is_flag=True, help="Allow --apply outside a UAT site")
+def import_waterproofing_project(site, workbook_path, apply_changes=False, allow_production=False):
+	"""Dry-run or apply the audited waterproofing planning import."""
+	import json
+
+	import frappe
+
+	from buildsuite_core.waterproofing_import_service import apply_import, get_import_plan
+
+	frappe.init(site=site)
+	frappe.connect()
+	frappe.set_user("Administrator")
+	try:
+		result = (
+			apply_import(workbook_path, allow_production=allow_production)
+			if apply_changes
+			else get_import_plan(workbook_path)
+		)
+		if apply_changes:
+			frappe.db.commit()
+		click.echo(json.dumps(result, indent=2, default=str))
+	except Exception:
+		frappe.db.rollback()
+		raise
+	finally:
+		frappe.destroy()
+
+
+commands = [
+	change_app_route,
+	retire_legacy_apps,
+	import_salary_sheet,
+	import_waterproofing_project,
+]

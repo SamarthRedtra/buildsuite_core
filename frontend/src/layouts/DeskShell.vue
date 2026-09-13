@@ -7,6 +7,7 @@ import { useUserNames } from "@/composables/useUserNames";
 import LogoIcon from "@/components/LogoIcon.vue";
 import RoleSwitcher from "@/components/RoleSwitcher.vue";
 import CompanySwitcher from "@/components/CompanySwitcher.vue";
+import GlobalSearchPalette from "@/components/GlobalSearchPalette.vue";
 import UserAvatar from "@/components/UserAvatar.vue";
 import { getWorkspaceIconPath } from "@/utils/workspaceIcons";
 import { getDeskUrl, logout, getSessionUser } from "@/utils/session";
@@ -157,7 +158,14 @@ const navGroups = computed(() => {
 	// PM / Administrator); it's a standalone feature, not a workspace, so it's pinned
 	// here rather than driven off the workspace-visibility matrix.
 	if (["director", "pm", "admin", "bsa"].includes(store.role)) {
-		buildsuiteItems.push({ slug: "insights", name: "Insights", to: "/insights", icon: "💡", group: "buildsuite", hint: null });
+		buildsuiteItems.push({
+			slug: "insights",
+			name: "Insights",
+			to: "/insights",
+			icon: "💡",
+			group: "buildsuite",
+			hint: null,
+		});
 	}
 	const erpnextItems = [];
 	const otherBuildsuiteItems = [];
@@ -238,13 +246,18 @@ const navGroups = computed(() => {
 				<button
 					type="button"
 					class="w-full h-full flex items-center justify-between text-left hover:bg-ink-50 pl-3 pr-2"
-					:class="[appMenuOpen ? 'bg-ink-50' : '', collapsed ? 'lg:justify-center lg:px-0' : '']"
+					:class="[
+						appMenuOpen ? 'bg-ink-50' : '',
+						collapsed ? 'lg:justify-center lg:px-0' : '',
+					]"
 					title="BuildSuite"
 					@click="toggleAppMenu"
 				>
 					<span class="flex items-center gap-2">
 						<LogoIcon :size="26" />
-						<span class="font-semibold text-ink-900 text-sm" :class="collapsed ? 'lg:hidden' : ''"
+						<span
+							class="font-semibold text-ink-900 text-sm"
+							:class="collapsed ? 'lg:hidden' : ''"
 							>BuildSuite</span
 						>
 					</span>
@@ -323,7 +336,12 @@ const navGroups = computed(() => {
 					:class="collapsed ? 'lg:justify-center lg:px-0' : ''"
 					:title="collapsed ? 'Search (⌘K)' : ''"
 				>
-					<svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<svg
+						class="w-3.5 h-3.5 flex-shrink-0"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
@@ -354,7 +372,9 @@ const navGroups = computed(() => {
 						:type="group.collapsible ? 'button' : null"
 						class="px-2 py-1.5 w-full text-left"
 						:class="[
-							group.collapsible ? 'flex items-center gap-1.5 rounded hover:bg-ink-50' : '',
+							group.collapsible
+								? 'flex items-center gap-1.5 rounded hover:bg-ink-50'
+								: '',
 							collapsed ? 'lg:hidden' : '',
 						]"
 						@click="group.collapsible ? toggleGroup(group.key) : null"
@@ -394,7 +414,11 @@ const navGroups = computed(() => {
 						:is="item.external ? 'a' : 'RouterLink'"
 						v-for="item in renderItems(group)"
 						:key="item.slug || item.to"
-						v-bind="item.external ? { href: item.href } : { to: item.to, activeClass: 'active' }"
+						v-bind="
+							item.external
+								? { href: item.href }
+								: { to: item.to, activeClass: 'active' }
+						"
 						class="desk-nav-link flex items-center gap-2.5 px-2 py-1.5 rounded hover:bg-ink-50"
 						:class="[
 							group.muted ? 'text-sm text-ink-500' : 'text-sm text-ink-700',
@@ -419,7 +443,9 @@ const navGroups = computed(() => {
 								v-html="getWorkspaceIconPath(item.slug)"
 							/>
 						</span>
-						<span class="flex-1 truncate" :class="collapsed ? 'lg:hidden' : ''">{{ item.name }}</span>
+						<span class="flex-1 truncate" :class="collapsed ? 'lg:hidden' : ''">{{
+							item.name
+						}}</span>
 						<span
 							v-if="item.hint"
 							:title="item.hint.title"
@@ -602,27 +628,6 @@ const navGroups = computed(() => {
 			</main>
 		</div>
 
-		<!-- Search palette -->
-		<div
-			v-if="searchOpen"
-			class="fixed inset-0 bg-ink-900/40 z-50 flex items-start justify-center pt-20"
-			@click="searchOpen = false"
-		>
-			<div
-				class="bg-white rounded-lg shadow-fp-lg w-full max-w-lg border border-ink-200"
-				@click.stop
-			>
-				<div class="p-3 border-b border-ink-200">
-					<input
-						autofocus
-						placeholder="Type to search projects, tasks, work packages..."
-						class="w-full px-3 py-2 text-sm focus:outline-none"
-					/>
-				</div>
-				<div class="p-3 text-xs text-ink-500">
-					Quick search across all data · ESC to close
-				</div>
-			</div>
-		</div>
+		<GlobalSearchPalette v-model:open="searchOpen" />
 	</div>
 </template>

@@ -91,7 +91,7 @@ const breadcrumbs = [
 						— no backend, no API. Created projects, tasks, SCOs, BOQs, attachments, and
 						stage plannings persist across reloads in <em>this browser only</em>.
 					</p>
-					<p class="mb-2">Three independent keys:</p>
+					<p class="mb-2">Two browser-local keys remain:</p>
 					<ul class="space-y-1 ml-4 list-disc">
 						<li>
 							<code
@@ -108,14 +108,6 @@ const breadcrumbs = [
 								>buildsuite:role</code
 							>
 							— active role (separate so resetAll() preserves UI preference).
-						</li>
-						<li>
-							<code
-								class="bg-ink-50 px-1 py-0.5 border border-ink-200"
-								style="border-radius: 2px"
-								>buildsuite:company</code
-							>
-							— active company (same independent-persistence pattern).
 						</li>
 					</ul>
 					<p class="mt-2 text-ink-500 italic">
@@ -166,9 +158,9 @@ const breadcrumbs = [
 							style="border-radius: 2px"
 							>buildsuite:data:v1</code
 						>
-						and re-hydrate from seed. Role / active-company preferences survive
-						(separate keys). Useful when seed data has been updated and you want to
-						pick up the new shape.
+						and re-hydrate from seed. The role preference survives in its separate key.
+						Company context always comes from ERPNext. Useful when seed data has been
+						updated and you want to pick up the new shape.
 					</p>
 					<button
 						type="button"

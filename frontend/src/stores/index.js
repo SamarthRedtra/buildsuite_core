@@ -6,7 +6,7 @@ import { defineStore } from "pinia";
 import { seedData } from "@/data/seed";
 import { ROLES, WORKSPACE_VISIBILITY, WORKSPACE_ORDER } from "@/data/roles";
 import { PROJECT_TYPE_TEMPLATES, templateForType } from "@/data/projectTypeTemplates";
-import { COMPANIES, DEFAULT_COMPANY_ID } from "@/data/companies";
+import { getActiveCompanyContext } from "@/data/companyApi";
 
 const STORAGE_KEY = "buildsuite:data:v1";
 // Role is persisted under its own key so resetAll() (which wipes domain data)
@@ -14,7 +14,7 @@ const STORAGE_KEY = "buildsuite:data:v1";
 const ROLE_STORAGE_KEY = "buildsuite:role";
 const DEFAULT_ROLE = "admin";
 // Active company also persisted independently — same rationale as role.
-const COMPANY_STORAGE_KEY = "buildsuite:company";
+const LEGACY_COMPANY_STORAGE_KEY = "buildsuite:company";
 // Light / dark theme — same independent-persistence pattern as role + company.
 const THEME_STORAGE_KEY = "buildsuite:theme";
 const DEFAULT_THEME = "light";
@@ -47,20 +47,11 @@ function saveRoleToStorage(roleId) {
 	}
 }
 
-function loadCompanyFromStorage() {
+function discardLegacyCompanyStorage() {
 	try {
-		return localStorage.getItem(COMPANY_STORAGE_KEY);
-	} catch (e) {
-		console.warn("Failed to read active company from localStorage:", e);
-		return null;
-	}
-}
-
-function saveCompanyToStorage(companyId) {
-	try {
-		localStorage.setItem(COMPANY_STORAGE_KEY, companyId);
-	} catch (e) {
-		console.warn("Failed to persist active company:", e);
+		localStorage.removeItem(LEGACY_COMPANY_STORAGE_KEY);
+	} catch (error) {
+		console.warn("Failed to discard legacy company preference:", error);
 	}
 }
 
@@ -83,7 +74,6 @@ function saveThemeToStorage(theme) {
 function saveToStorage(state) {
 	try {
 		const payload = {
-			companies: state.companies,
 			user: state.user,
 			team: state.team,
 			projects: state.projects,
@@ -135,9 +125,8 @@ export const useDataStore = defineStore("data", {
 		hydrated: false,
 		// Active role id. NOT persisted via _persist() — see ROLE_STORAGE_KEY above.
 		role: DEFAULT_ROLE,
-		// Active company id. Same independent-persistence rationale as `role` — lives
-		// in COMPANY_STORAGE_KEY so resetAll() preserves it as a UI preference.
-		activeCompany: DEFAULT_COMPANY_ID,
+		// Active company id. Loaded from ERPNext; browser-local company switching is retired.
+		activeCompany: "",
 		// Light / dark theme. Same independent-persistence pattern as role +
 		// company — lives in THEME_STORAGE_KEY so resetAll() preserves it as
 		// a UI preference.
@@ -460,12 +449,11 @@ export const useDataStore = defineStore("data", {
 			this.theme =
 				storedTheme === "dark" || storedTheme === "light" ? storedTheme : DEFAULT_THEME;
 			const stored = loadFromStorage();
+			discardLegacyCompanyStorage();
+			this.companies = [];
 			if (stored) {
 				this.user = stored.user;
 				this.team = stored.team;
-				// Companies first — back-compat fallback for payloads predating §14.
-				this.companies =
-					stored.companies ?? JSON.parse(JSON.stringify(seedData.companies));
 				// Session 40 — Customer master with seed fallback.
 				this.customers =
 					stored.customers ?? JSON.parse(JSON.stringify(seedData.customers));
@@ -570,7 +558,6 @@ export const useDataStore = defineStore("data", {
 					!stored.taskProgressEntries ||
 					!stored.stagePlannings ||
 					!stored.attachments ||
-					!stored.companies ||
 					!stored.customers ||
 					!stored.coreSettings ||
 					!stored.siteExecutionSettings ||
@@ -583,7 +570,6 @@ export const useDataStore = defineStore("data", {
 			} else {
 				this.user = seedData.user;
 				this.team = seedData.team;
-				this.companies = JSON.parse(JSON.stringify(seedData.companies));
 				this.customers = JSON.parse(JSON.stringify(seedData.customers));
 				this.projects = JSON.parse(JSON.stringify(seedData.projects));
 				this.workPackages = JSON.parse(JSON.stringify(seedData.workPackages));
@@ -610,15 +596,15 @@ export const useDataStore = defineStore("data", {
 				this.projectTypes = JSON.parse(JSON.stringify(seedData.projectTypes));
 				this._persist();
 			}
-			// Resolve active company AFTER companies slice is populated. Defensive: if
-			// the stored id is no longer present (companies removed from the fixture),
-			// fall back to the first available company or the DEFAULT_COMPANY_ID seed.
-			const storedCompany = loadCompanyFromStorage();
-			const validCompanyIds = this.companies.map((c) => c.id);
-			this.activeCompany =
-				storedCompany && validCompanyIds.includes(storedCompany)
-					? storedCompany
-					: this.companies[0]?.id || DEFAULT_COMPANY_ID;
+			// Rewrite legacy payloads without their browser-local company slice.
+			this._persist();
+			getActiveCompanyContext()
+				.then((company) => {
+					this.companies = company ? [company] : [];
+					this.activeCompany = company?.id || "";
+					this._backfillCompany();
+				})
+				.catch((error) => console.warn("Failed to load active company:", error));
 			// Backfill `company` onto child records that predate §14. Idempotent — only
 			// sets the field where it's missing. Simulates the production hook that
 			// would auto-populate `company` on cascade.
@@ -693,16 +679,6 @@ export const useDataStore = defineStore("data", {
 		},
 		toggleTheme() {
 			this.setTheme(this.theme === "dark" ? "light" : "dark");
-		},
-
-		// ===== Active company (UI preference, persisted to COMPANY_STORAGE_KEY) =====
-		// Same independent-persistence pattern as setRole. Validates against the
-		// companies slice (not the static COMPANIES fixture import) so editing the
-		// seed after first run doesn't strand the user on a deleted id.
-		setActiveCompany(companyId) {
-			if (!this.companies.find((c) => c.id === companyId)) return;
-			this.activeCompany = companyId;
-			saveCompanyToStorage(companyId);
 		},
 
 		// ===== Settings DocTypes (Session 34) =====
@@ -815,68 +791,6 @@ export const useDataStore = defineStore("data", {
 				shortcuts: rows,
 			};
 			this._persist();
-		},
-
-		// ===== Company CRUD (Session 32 — Settings page) =====
-		// Note: companies are org-wide masters (§14.4) — not project-scoped. Deletion
-		// is blocked when any project references the company (Frappe-standard
-		// LinkExistsError pattern, per the user's design-question choice).
-		addCompany(data) {
-			// ID is user-provided OR auto-generated. We normalise to uppercase and
-			// ensure uniqueness — if a collision, append a numeric suffix.
-			let id = (data.id || "").trim().toUpperCase();
-			if (!id) id = uid("CMP").toUpperCase();
-			if (this.companies.find((c) => c.id === id)) {
-				let n = 2;
-				while (this.companies.find((c) => c.id === `${id}-${n}`)) n++;
-				id = `${id}-${n}`;
-			}
-			const company = {
-				id,
-				name: (data.name || "Untitled Company").trim(),
-				shortName: (data.shortName || data.name || "Company").trim(),
-				description: (data.description || "").trim(),
-				color: data.color || "bg-ink-600",
-			};
-			this.companies.push(company);
-			this._persist();
-			return company;
-		},
-		updateCompany(id, patch) {
-			const idx = this.companies.findIndex((c) => c.id === id);
-			if (idx === -1) return null;
-			// ID is locked after create — strip it from any patch to avoid silent rename.
-			const safe = { ...patch };
-			delete safe.id;
-			this.companies[idx] = { ...this.companies[idx], ...safe };
-			this._persist();
-			return this.companies[idx];
-		},
-		deleteCompany(id) {
-			// Refuse if any project references this company. Mirror of Frappe's
-			// LinkExistsError — return a result the UI can render meaningfully.
-			const linked = this.projects.filter((p) => p.company === id);
-			if (linked.length) {
-				return {
-					ok: false,
-					reason: "referenced",
-					projects: linked.map((p) => ({ id: p.id, name: p.name, code: p.code })),
-				};
-			}
-			const idx = this.companies.findIndex((c) => c.id === id);
-			if (idx === -1) return { ok: false, reason: "not_found" };
-			this.companies.splice(idx, 1);
-			// If the deleted company was the active one, pivot to the first remaining
-			// company so the topbar switcher doesn't strand on a missing id.
-			if (this.activeCompany === id) {
-				const next = this.companies[0]?.id;
-				if (next) {
-					this.activeCompany = next;
-					saveCompanyToStorage(next);
-				}
-			}
-			this._persist();
-			return { ok: true };
 		},
 
 		// ===== Projects =====
