@@ -16,16 +16,16 @@ APP_ROUTE = "core"
 
 required_apps = ["erpnext"]
 
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "buildsuite_core",
-# 		"logo": "/assets/buildsuite_core/images/bs-icon.svg",
-# 		"title": "Redtra Suite",
-# 		"route": f"/{APP_ROUTE}",
-#         "has_permission": "buildsuite_core.api.permission.has_app_permission",
-# 	}
-# ]
+# Each item in the list will be shown as an app in the apps page.
+add_to_apps_screen = [
+	{
+		"name": app_name,
+		"logo": "/assets/buildsuite_core/images/bs-icon.svg",
+		"title": app_title,
+		"route": f"/{APP_ROUTE}",
+		"has_permission": "buildsuite_core.api.permission.has_app_permission",
+	}
+]
 
 website_route_rules = [
 	{"from_route": f"/{APP_ROUTE}/<path:app_path>", "to_route": APP_ROUTE},
