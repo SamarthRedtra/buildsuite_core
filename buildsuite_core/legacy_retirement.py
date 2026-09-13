@@ -54,6 +54,8 @@ CUSTOM_FIELD_ALLOWLIST = (
 	("Purchase Receipt", "custom_boq_item"),
 	("Purchase Receipt Item Supplied", "project_sites"),
 	("Purchase Receipt Item Supplied", "site"),
+	("Landed Cost Taxes and Charges", "bill_no"),
+	("Landed Cost Taxes and Charges", "boq_item"),
 	("Purchase Taxes and Charges", "bill_no"),
 	("Purchase Taxes and Charges", "boq_item"),
 	("Sales Invoice", "bill_no"),
@@ -301,6 +303,7 @@ def create_private_archive(plan):
 	exports.append(
 		export_rows("Custom Field Allowlist", custom_field_rows, archive_path, source_module="Custom")
 	)
+	exports.extend(export_custom_field_values(plan["allowlisted_custom_fields"], archive_path))
 
 	property_setter_rows = frappe.get_all(
 		"Property Setter",
@@ -334,6 +337,48 @@ def create_private_archive(plan):
 	manifest["manifest_checksum"] = hashlib.sha256(manifest_bytes).hexdigest()
 	(archive_path / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
 	return archive_path, manifest
+
+
+def export_custom_field_values(custom_fields, archive_path):
+	fields_by_doctype = {}
+	for custom_field in custom_fields:
+		fields_by_doctype.setdefault(custom_field.dt, []).append(custom_field.fieldname)
+
+	exports = []
+	for doctype, fieldnames in sorted(fields_by_doctype.items()):
+		columns = set(frappe.db.get_table_columns(doctype))
+		tracked_fields = sorted(set(fieldnames) & columns)
+		if not tracked_fields:
+			continue
+
+		identity_fields = [
+			fieldname
+			for fieldname in ("name", "parent", "parenttype", "parentfield", "idx", "docstatus", "modified")
+			if fieldname in columns
+		]
+		records = frappe.get_all(
+			doctype,
+			fields=[*identity_fields, *tracked_fields],
+			order_by="name",
+			limit_page_length=0,
+		)
+		populated_records = [
+			record for record in records if any(has_legacy_value(record.get(field)) for field in tracked_fields)
+		]
+		if populated_records:
+			exports.append(
+				export_rows(
+					f"{doctype} Legacy Custom Field Values",
+					populated_records,
+					archive_path,
+					source_module="Custom",
+				)
+			)
+	return exports
+
+
+def has_legacy_value(value):
+	return value not in (None, "", 0, False)
 
 
 def export_doctype(doctype, archive_path):
