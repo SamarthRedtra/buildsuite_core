@@ -12,6 +12,7 @@ from frappe.database.schema import add_column
 from frappe.utils import cint, get_bench_path, now_datetime
 
 LEGACY_APPS = ("redtra_customisation", "construction_management")
+LEGACY_ACCOUNTING_DIMENSION_DOCUMENT_TYPES = ("BOQ Bill",)
 PDC_DOCTYPES = (
 	"Post Dated Cheques",
 	"PDC Invoice Reference",
@@ -117,6 +118,7 @@ PDC_STATUS_MAP = {
 def get_retirement_plan():
 	installed_legacy_apps = [app for app in LEGACY_APPS if app in frappe.get_installed_apps()]
 	runtime_registry_legacy_apps = get_runtime_registry_legacy_apps()
+	legacy_accounting_dimensions = get_legacy_accounting_dimensions()
 	legacy_modules = frappe.get_all(
 		"Module Def", filters={"app_name": ["in", LEGACY_APPS]}, pluck="name", order_by="name"
 	)
@@ -149,7 +151,9 @@ def get_retirement_plan():
 		"legacy_apps": list(LEGACY_APPS),
 		"installed_legacy_apps": installed_legacy_apps,
 		"runtime_registry_legacy_apps": runtime_registry_legacy_apps,
-		"retirement_complete": not installed_legacy_apps and not runtime_registry_legacy_apps,
+		"retirement_complete": not installed_legacy_apps
+		and not runtime_registry_legacy_apps
+		and not legacy_accounting_dimensions,
 		"legacy_modules": legacy_modules,
 		"archive_doctypes": archive_doctypes,
 		"record_counts": counts,
@@ -158,6 +162,7 @@ def get_retirement_plan():
 		"shared_doctype_ownership": ownership,
 		"allowlisted_custom_fields": custom_fields,
 		"allowlisted_property_setters": property_setters,
+		"legacy_accounting_dimensions": legacy_accounting_dimensions,
 		"payment_entries_to_migrate": (count_legacy_pdc_payment_entries() if installed_legacy_apps else 0),
 	}
 
@@ -184,6 +189,7 @@ def apply_retirement_preparation(allow_production=False):
 	ensure_native_payment_entry_pdc_columns()
 	payment_entry_result = migrate_legacy_payment_entry_pdc_fields()
 	pdc_status_result = migrate_pdc_statuses()
+	removed_accounting_dimensions = remove_legacy_accounting_dimensions()
 	removed_custom_fields = remove_allowlisted_custom_field_definitions()
 	removed_property_setters = remove_allowlisted_property_setters()
 	frappe.clear_cache()
@@ -194,6 +200,7 @@ def apply_retirement_preparation(allow_production=False):
 		"archive_manifest_checksum": manifest["manifest_checksum"],
 		"payment_entry_migration": payment_entry_result,
 		"pdc_status_migration": pdc_status_result,
+		"removed_accounting_dimensions": removed_accounting_dimensions,
 		"removed_custom_field_definitions": removed_custom_fields,
 		"removed_property_setters": removed_property_setters,
 		"shared_doctype_ownership_after": get_shared_doctype_ownership(),
@@ -270,6 +277,15 @@ def get_allowlisted_property_setters():
 	)
 
 
+def get_legacy_accounting_dimensions():
+	return frappe.get_all(
+		"Accounting Dimension",
+		filters={"document_type": ["in", LEGACY_ACCOUNTING_DIMENSION_DOCUMENT_TYPES]},
+		fields=["name", "document_type", "label", "fieldname", "disabled"],
+		order_by="name",
+	)
+
+
 def count_legacy_pdc_payment_entries():
 	columns = set(frappe.db.get_table_columns("Payment Entry"))
 	legacy_fields = [
@@ -317,6 +333,31 @@ def create_private_archive(plan):
 			property_setter_rows,
 			archive_path,
 			source_module="Custom",
+		)
+	)
+	accounting_dimension_names = [row.name for row in plan["legacy_accounting_dimensions"]]
+	exports.append(
+		export_rows(
+			"Legacy Accounting Dimensions",
+			plan["legacy_accounting_dimensions"],
+			archive_path,
+			source_module="Accounts",
+		)
+	)
+	accounting_dimension_details = []
+	if accounting_dimension_names:
+		accounting_dimension_details = frappe.get_all(
+			"Accounting Dimension Detail",
+			filters={"parent": ["in", accounting_dimension_names]},
+			fields=["*"],
+			order_by="parent, idx",
+		)
+	exports.append(
+		export_rows(
+			"Legacy Accounting Dimension Details",
+			accounting_dimension_details,
+			archive_path,
+			source_module="Accounts",
 		)
 	)
 
@@ -575,6 +616,41 @@ def remove_allowlisted_custom_field_definitions():
 			frappe.db.delete("Custom Field", {"name": name})
 			removed.append(name)
 	return removed
+
+
+def remove_legacy_accounting_dimensions():
+	dimensions = get_legacy_accounting_dimensions()
+	if not dimensions:
+		return []
+
+	names = [dimension.name for dimension in dimensions]
+	frappe.db.delete("Accounting Dimension Detail", {"parent": ["in", names]})
+	frappe.db.delete("Accounting Dimension", {"name": ["in", names]})
+	remove_budget_dimension_options(
+		{dimension.document_type for dimension in dimensions if dimension.document_type}
+	)
+	return names
+
+
+def remove_budget_dimension_options(document_types):
+	property_setter = frappe.db.get_value(
+		"Property Setter", "Budget-budget_against-options", ["name", "value"], as_dict=True
+	)
+	if not property_setter:
+		return
+
+	options = [
+		option
+		for option in (property_setter.value or "").splitlines()
+		if option and option not in document_types
+	]
+	frappe.db.set_value(
+		"Property Setter",
+		property_setter.name,
+		"value",
+		"\n" + "\n".join(options),
+		update_modified=False,
+	)
 
 
 def remove_allowlisted_property_setters():
