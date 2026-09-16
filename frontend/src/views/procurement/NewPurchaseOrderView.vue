@@ -28,7 +28,14 @@ const canSaveForm = computed(() =>
 );
 
 function emptyLine() {
-	return { item_code: "", description: "", qty: null, uom: "", rate: null };
+	return {
+		material_request_item: null,
+		item_code: "",
+		description: "",
+		qty: null,
+		uom: "",
+		rate: null,
+	};
 }
 function inDays(n) {
 	return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
@@ -60,8 +67,9 @@ watch(
 				supplier: po.supplier || "",
 				project: po.project || "",
 				schedule_date: po.schedule_date || inDays(10),
-				material_request: null,
+				material_request: po.material_request || null,
 				lines: (po.items || []).map((it) => ({
+					material_request_item: it.material_request_item || null,
 					item_code: it.item_code || "",
 					description: it.description || "",
 					qty: it.qty,
@@ -88,6 +96,7 @@ watch(
 			form.value.material_request = pre.material_request;
 			if (pre.lines?.length) {
 				form.value.lines = pre.lines.map((l) => ({
+					material_request_item: l.material_request_item,
 					item_code: l.item_code || "",
 					description: l.description || "",
 					qty: l.qty,
@@ -140,6 +149,7 @@ async function onSave() {
 			schedule_date: form.value.schedule_date,
 			material_request: form.value.material_request || undefined,
 			items: validLines.value.map((l) => ({
+				material_request_item: l.material_request_item || null,
 				item_code: l.item_code,
 				description: l.description,
 				qty: Number(l.qty),

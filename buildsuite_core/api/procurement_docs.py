@@ -206,6 +206,7 @@ def delete_material_request(name: str):
 
 
 def _serialize_po(doc):
+	material_request = next((it.material_request for it in doc.items if it.material_request), None)
 	return {
 		"name": doc.name,
 		"supplier": doc.supplier,
@@ -226,6 +227,7 @@ def _serialize_po(doc):
 		"terms": doc.terms,
 		"tc_name": doc.tc_name,
 		"company": doc.company,
+		"material_request": material_request,
 		"items": [
 			{
 				"name": it.name,
@@ -239,6 +241,8 @@ def _serialize_po(doc):
 				"received_qty": flt(it.received_qty),
 				"warehouse": it.warehouse,
 				"project": it.project,
+				"material_request": it.material_request,
+				"material_request_item": it.material_request_item,
 			}
 			for it in doc.items
 		],
@@ -324,6 +328,7 @@ def get_mr_for_po(material_request: str):
 			continue
 		lines.append(
 			{
+				"material_request_item": it.name,
 				"item_code": it.item_code,
 				"item_name": it.item_name,
 				"description": it.description,
@@ -393,6 +398,7 @@ def save_purchase_order(
 				"warehouse": default_wh,
 				"project": project,
 				"material_request": material_request or None,
+				"material_request_item": row.get("material_request_item") or None,
 			},
 		)
 	if not doc.get("items"):

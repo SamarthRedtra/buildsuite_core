@@ -9,6 +9,7 @@ import frappe
 from frappe.utils import add_days, nowdate
 
 from buildsuite_core.api import procurement as api
+from buildsuite_core.api import procurement_docs
 from buildsuite_core.tests.base import BuildSuiteTestCase
 
 
@@ -161,3 +162,39 @@ class TestProcurementDashboard(BuildSuiteTestCase):
 		self.assertIsNotNone(receipt)
 		self.assertEqual(receipt["status"], "Full")
 		self.assertEqual(receipt["item_count"], 1)
+
+	def test_purchase_order_keeps_material_request_item_link(self):
+		project = self._make_project(company=self.company)
+		supplier = self._supplier()
+		item = self._item()
+		mr = self._submit_mr(project.name, item.name, qty=4, rate=25)
+
+		prefill = procurement_docs.get_mr_for_po(mr.name)
+		self.assertEqual(prefill["lines"][0]["material_request_item"], mr.items[0].name)
+
+		po = procurement_docs.save_purchase_order(
+			supplier=supplier.name,
+			project=project.name,
+			schedule_date=add_days(nowdate(), 7),
+			material_request=mr.name,
+			items=frappe.as_json(prefill["lines"]),
+		)
+		procurement_docs.submit_purchase_order(po["name"])
+
+		mr.reload()
+		self.assertEqual(mr.items[0].ordered_qty, 4)
+		self.assertEqual(mr.per_ordered, 100)
+		self.assertEqual(mr.status, "Ordered")
+
+		receipt_draft = procurement_docs.get_receipt_draft(po["name"])
+		receipt = procurement_docs.save_purchase_receipt(
+			purchase_order=po["name"],
+			posting_date=nowdate(),
+			items=frappe.as_json(receipt_draft["items"]),
+		)
+		procurement_docs.submit_purchase_receipt(receipt["name"])
+
+		mr.reload()
+		self.assertEqual(mr.items[0].received_qty, 4)
+		self.assertEqual(mr.per_received, 100)
+		self.assertEqual(mr.status, "Received")

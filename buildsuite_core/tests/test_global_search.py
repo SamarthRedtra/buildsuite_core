@@ -3,7 +3,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import UnitTestCase
 
-from buildsuite_core.api.global_search import LIMIT, global_search
+from buildsuite_core.api.global_search import LIMIT, _document_route, global_search
 
 
 class TestGlobalSearch(UnitTestCase):
@@ -47,17 +47,28 @@ class TestGlobalSearch(UnitTestCase):
 				)
 			],
 		]
-		with patch("buildsuite_core.api.global_search.frappe.get_list", side_effect=rows) as get_list:
+		with (
+			patch("buildsuite_core.api.global_search.frappe.get_list", side_effect=rows) as get_list,
+			patch("buildsuite_core.api.global_search._doctype_results", return_value=[]),
+			patch("buildsuite_core.api.global_search._document_results", return_value=[]),
+		):
 			result = global_search("water")
 
 		self.assertEqual(
-			[group["label"] for group in result["groups"]], ["Projects", "Tasks", "Work Packages"]
+			[group["label"] for group in result["groups"]],
+			["DocTypes", "Projects", "Tasks", "Work Packages", "Documents"],
 		)
 		self.assertEqual(
-			[group["results"][0]["route"] for group in result["groups"]],
+			[group["results"][0]["route"] for group in result["groups"] if group["results"]],
 			["/projects/BS-WP-001", "/tasks/TASK-001", "/work-packages/WP-2026-001"],
 		)
 		self.assertTrue(all(call.kwargs["limit_page_length"] == LIMIT for call in get_list.call_args_list))
 		self.assertTrue(
 			all(call.args[0] in {"Project", "Task", "Work Package"} for call in get_list.call_args_list)
+		)
+
+	def test_internal_document_routes_encode_names(self):
+		self.assertEqual(
+			_document_route("Sales Invoice", "SA2026/0824"),
+			"/project-finance/invoices/SA2026%2F0824",
 		)

@@ -68,6 +68,10 @@ watch(
 function selectResult(result) {
 	if (!result) return;
 	close();
+	if (result.external) {
+		window.location.assign(result.route);
+		return;
+	}
 	router.push(result.route);
 }
 
@@ -124,7 +128,7 @@ onBeforeUnmount(() => {
 				<input
 					ref="input"
 					v-model="query"
-					placeholder="Type to search projects, tasks, work packages..."
+					placeholder="Search documents, DocTypes, projects, tasks..."
 					class="w-full px-3 py-2 text-sm focus:outline-none"
 					aria-label="Global search"
 				/>
@@ -136,7 +140,7 @@ onBeforeUnmount(() => {
 				<div v-else-if="loading" class="p-3 text-xs text-ink-500">Searching…</div>
 				<div v-else-if="error" class="p-3 text-xs text-danger-600">{{ error }}</div>
 				<div v-else-if="hasSearched && !results.length" class="p-3 text-xs text-ink-500">
-					No matching projects, tasks, or work packages.
+					No matching documents or DocTypes.
 				</div>
 				<div v-for="group in groups" :key="group.label" class="mb-2 last:mb-0">
 					<div
