@@ -116,7 +116,7 @@ const STANDARD_FIELDS = new Set([
 
 const resolvedFields = computed(() => {
 	const candidates = configuredColumns.value
-		? configuredColumns.value.flatMap((column) => {
+		? configuredColumns.value.filter((column) => column.query !== false).flatMap((column) => {
 				if (Array.isArray(column.fields) && column.fields.length) return column.fields;
 				return [column.key];
 		  })

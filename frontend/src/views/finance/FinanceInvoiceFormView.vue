@@ -70,7 +70,7 @@ if (isEdit.value) {
 	getInvoice(props.id)
 		.then((inv) => {
 			if (inv.docstatus !== 0) {
-				router.replace(`/project-finance/invoices/${props.id}`);
+				router.replace({ name: "finance-invoice", params: { id: props.id } });
 				return;
 			}
 			Object.assign(form, {
@@ -263,7 +263,7 @@ async function save() {
 			allocate_advances_automatically: form.enable_advance_recovery ? 1 : 0,
 		});
 		showToast(isEdit.value ? "Invoice updated." : "Invoice saved as draft.");
-		router.push(`/project-finance/invoices/${res.name}`);
+		router.push({ name: "finance-invoice", params: { id: res.name } });
 	} catch (err) {
 		showToast(err.message || "Failed to save", "error");
 	} finally {

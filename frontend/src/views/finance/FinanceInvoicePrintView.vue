@@ -38,7 +38,7 @@ function printDoc() {
 	window.print();
 }
 function backToInvoice() {
-	router.push(`/project-finance/invoices/${props.id}`);
+	router.push({ name: "finance-invoice", params: { id: props.id } });
 }
 
 async function load() {

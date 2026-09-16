@@ -175,7 +175,7 @@ function onPrint() {
 	// Work Order print) — the user reviews it, then Export PDF runs window.print(). Cancelled
 	// invoices aren't printable (button disabled); guard the direct call too.
 	if (isCancelled.value) return;
-	router.push(`/project-finance/invoices/${inv.value.name}/print`);
+	router.push({ name: "finance-invoice-print", params: { id: inv.value.name } });
 }
 
 async function onReleaseRetention() {
@@ -396,7 +396,7 @@ async function unlinkAdvance(row) {
 					v-if="isDraft && canEdit('salesInvoice')"
 					type="button"
 					class="text-xs px-3 py-1.5 border border-ink-200 bg-white hover:bg-ink-50 text-ink-700 rounded-md"
-					@click="router.push(`/project-finance/invoices/${inv.name}/edit`)"
+					@click="router.push({ name: 'finance-invoice-edit', params: { id: inv.name } })"
 				>
 					Edit
 				</button>

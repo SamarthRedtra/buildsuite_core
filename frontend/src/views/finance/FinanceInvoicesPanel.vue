@@ -98,7 +98,7 @@ const filterFieldMap = {
 };
 
 function openDetail(row) {
-	router.push(`/project-finance/invoices/${row.name}`);
+	router.push({ name: "finance-invoice", params: { id: row.name } });
 }
 function openNew() {
 	router.push("/project-finance/invoices/new");
@@ -285,7 +285,7 @@ async function saveAdvance() {
 					{ key: 'grand_total', label: 'Total', align: 'right' },
 					{ key: 'outstanding_amount', label: 'Outstanding', align: 'right' },
 					{ key: 'status', label: 'Status', fields: ['status', 'outstanding_amount'] },
-					{ key: 'actions', label: '', align: 'right' },
+					{ key: 'actions', label: '', align: 'right', query: false },
 				]"
 				:search-fields="['name', 'customer_name']"
 				:base-filters="baseFilters"

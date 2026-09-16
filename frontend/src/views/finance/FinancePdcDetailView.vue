@@ -61,7 +61,7 @@ async function act(fn, success) {
 			</section>
 			<section class="bg-white border border-ink-200 rounded-lg overflow-hidden">
 				<div class="bg-ink-50 px-4 py-2 text-[11px] uppercase tracking-wider font-semibold text-ink-700">Invoice allocations</div>
-				<div v-for="row in doc.invoice_references" :key="row.reference_name" class="grid grid-cols-[1fr_140px] gap-3 px-4 py-2.5 border-t border-ink-100 text-sm"><DeskLink :to="row.reference_doctype === 'Sales Invoice' ? `/project-finance/invoices/${row.reference_name}` : `/project-finance/supplier-bills/${row.reference_name}`">{{ row.reference_name }}</DeskLink><span class="text-right tabular-nums font-medium">{{ fmtINR(row.allocated_amount) }}</span></div>
+				<div v-for="row in doc.invoice_references" :key="row.reference_name" class="grid grid-cols-[1fr_140px] gap-3 px-4 py-2.5 border-t border-ink-100 text-sm"><DeskLink :to="row.reference_doctype === 'Sales Invoice' ? { name: 'finance-invoice', params: { id: row.reference_name } } : `/project-finance/supplier-bills/${row.reference_name}`">{{ row.reference_name }}</DeskLink><span class="text-right tabular-nums font-medium">{{ fmtINR(row.allocated_amount) }}</span></div>
 			</section>
 			<div v-if="doc.payment_entry" class="text-sm">Payment Entry: <DeskLink :to="`/app/payment-entry/${doc.payment_entry}`">{{ doc.payment_entry }}</DeskLink></div>
 		</div>
