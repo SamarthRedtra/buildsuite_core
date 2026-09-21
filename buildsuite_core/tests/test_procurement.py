@@ -198,3 +198,37 @@ class TestProcurementDashboard(BuildSuiteTestCase):
 		self.assertEqual(mr.items[0].received_qty, 4)
 		self.assertEqual(mr.per_received, 100)
 		self.assertEqual(mr.status, "Received")
+
+	def test_procurement_chain_defaults_to_project_store(self):
+		project = self._make_project(company=self.company)
+		supplier = self._supplier()
+		item = self._item()
+		project_store = frappe.db.get_value(
+			"Warehouse", {"project": project.name, "is_group": 0, "disabled": 0}, "name"
+		)
+		self.assertTrue(project_store)
+
+		mr_data = procurement_docs.save_material_request(
+			project=project.name,
+			schedule_date=add_days(nowdate(), 7),
+			items=frappe.as_json([{"item_code": item.name, "qty": 2, "rate": 50}]),
+		)
+		mr = frappe.get_doc("Material Request", mr_data["name"])
+		self.assertEqual(mr.items[0].warehouse, project_store)
+		mr.submit()
+
+		prefill = procurement_docs.get_mr_for_po(mr.name)
+		po_data = procurement_docs.save_purchase_order(
+			supplier=supplier.name,
+			project=project.name,
+			schedule_date=add_days(nowdate(), 7),
+			material_request=mr.name,
+			items=frappe.as_json(prefill["lines"]),
+		)
+		po = frappe.get_doc("Purchase Order", po_data["name"])
+		self.assertEqual(po.items[0].warehouse, project_store)
+		po.submit()
+
+		receipt = procurement_docs.get_receipt_draft(po.name)
+		self.assertEqual(receipt["warehouse"], project_store)
+		self.assertTrue(all(row["warehouse"] == project_store for row in receipt["items"]))

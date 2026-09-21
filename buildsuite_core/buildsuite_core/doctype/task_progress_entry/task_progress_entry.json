@@ -9,6 +9,9 @@
   "task",
   "progress_section",
   "cumulative_progress",
+  "progress_input_mode",
+  "cumulative_quantity",
+  "quantity_uom",
   "column_break_bume",
   "entry_date",
   "narrative",
@@ -43,8 +46,31 @@
    "fieldtype": "Float",
    "in_list_view": 1,
    "label": "Cumulative progress",
-   "precision": "0",
+   "mandatory_depends_on": "eval:doc.progress_input_mode!='Quantity'",
+   "precision": "0"
+  },
+  {
+   "default": "Percent",
+   "fieldname": "progress_input_mode",
+   "fieldtype": "Select",
+   "label": "Progress input mode",
+   "options": "Percent\nQuantity",
    "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.progress_input_mode=='Quantity'",
+   "fieldname": "cumulative_quantity",
+   "fieldtype": "Float",
+   "label": "Cumulative quantity",
+   "mandatory_depends_on": "eval:doc.progress_input_mode=='Quantity'"
+  },
+  {
+   "depends_on": "eval:doc.progress_input_mode=='Quantity'",
+   "fieldname": "quantity_uom",
+   "fieldtype": "Link",
+   "label": "Quantity UOM",
+   "options": "UOM",
+   "read_only": 1
   },
   {
    "description": "Count of skilled workers on site today",

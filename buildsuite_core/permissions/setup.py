@@ -747,6 +747,20 @@ DERIVED_ATTENDANCE_ROLE_PERMS = {
 	)
 }
 
+# Labour Cost Sheet turns approved attendance into a project-cost Journal Entry. HR prepares
+# drafts; the project/finance approvers own submission and cancellation. Site/QS roles can see
+# the resulting cost but cannot alter or post it.
+LABOUR_COST_SHEET_ROLE_PERMS = {
+	"BuildSuite Administrator": _FULL_SUB,
+	"BuildSuite Director": _FULL_SUB,
+	"BuildSuite PM": _FULL_SUB,
+	"BuildSuite Accountant": _FULL_SUB,
+	"BuildSuite HR Manager": _CRW,
+	"BuildSuite QS": _READ,
+	"BuildSuite Site Engineer": _READ,
+	"BuildSuite Foreman": _READ,
+}
+
 
 # Worker master — the standard Employee doctype (BuildSuite has no separate Field Employee
 # doctype). HR owns it; PM + admin tier full; Site Engineer edits (no delete); Director +
@@ -774,6 +788,7 @@ CREW_ROLE_PERMS = {
 
 def setup_workforce_permissions():
 	_apply_role_perms("Field Attendance", FIELD_ATTENDANCE_ROLE_PERMS, _SUBMIT_PTYPES)
+	_apply_role_perms("Labour Cost Sheet", LABOUR_COST_SHEET_ROLE_PERMS, _SUBMIT_PTYPES)
 	# Worker master + Crew (the M3 matrix missed both — Crew had no BuildSuite grant at all,
 	# and Employee was read-only via the picker mirror, so HR/PM/admin couldn't maintain it).
 	_upgrade_role_perms("Employee", EMPLOYEE_WRITE_ROLE_PERMS)

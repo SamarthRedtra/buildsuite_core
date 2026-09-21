@@ -29,9 +29,12 @@ const HARD_SKIP = new Set([
 ]);
 
 const columns = computed(() => {
-	const fields = (meta.value?.fields || []).filter(
-		(f) => !HARD_SKIP.has(f.fieldtype) && !f.hidden && !f.read_only
+	const visible = (meta.value?.fields || []).filter(
+		(f) => !HARD_SKIP.has(f.fieldtype) && !f.hidden
 	);
+	// A server-derived table is read-only as a whole. Its columns are also read-only,
+	// but must remain visible so users can inspect the generated attendance summary.
+	const fields = props.disabled ? visible : visible.filter((f) => !f.read_only);
 	const inList = fields.filter((f) => f.in_list_view);
 	return (inList.length ? inList : fields).slice(0, 8);
 });
@@ -131,4 +134,3 @@ const detailRow = computed(() => rows.value[detailIndex.value] || {});
 		/>
 	</div>
 </template>
-

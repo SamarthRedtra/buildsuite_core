@@ -87,6 +87,12 @@ def seed_master_data():
 
 	ensure_item_conversion_stock_entry_type()
 
+	from buildsuite_core.buildsuite_core.doctype.workspace_setting.seed_workspace_reports import (
+		seed_workspace_doctypes,
+	)
+
+	seed_workspace_doctypes()
+
 	# Project Categories (our construction categories) — the New Project form and
 	# project templates key off these; the native Project Type stays Internal/External.
 	from buildsuite_core.buildsuite_core.doctype.project_category.seed_categories import seed_categories

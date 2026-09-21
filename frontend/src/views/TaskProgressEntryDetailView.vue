@@ -55,6 +55,9 @@ function loadEntryResource() {
 			"task",
 			"entry_date",
 			"cumulative_progress",
+			"progress_input_mode",
+			"cumulative_quantity",
+			"quantity_uom",
 			"skilled",
 			"unskilled",
 			"weather",
@@ -71,6 +74,9 @@ function loadEntryResource() {
 				task: row?.task || "",
 				entryDate: row?.entry_date || null,
 				progressPct: Number(row?.cumulative_progress) || 0,
+				progressInputMode: row?.progress_input_mode || "Percent",
+				cumulativeQty: row?.cumulative_quantity != null ? Number(row.cumulative_quantity) : null,
+				quantityUom: row?.quantity_uom || "",
 				narrative: row?.narrative || "",
 				skilledLabour: Number(row?.skilled) || 0,
 				unskilledLabour: Number(row?.unskilled) || 0,
@@ -462,6 +468,9 @@ const breadcrumbs = computed(() => {
 const titleStatuses = computed(() => {
 	if (!entry.value) return [];
 	const out = [`${entry.value.progressPct}% cumulative`];
+	if (entry.value.cumulativeQty != null && entry.value.quantityUom) {
+		out.push(`${entry.value.cumulativeQty} ${entry.value.quantityUom}`);
+	}
 	if (entry.value.blockerFlag) out.push("Blocker");
 	if (isLatestOnTask.value) out.push("Latest on task");
 	return out;
@@ -528,6 +537,17 @@ usePageTitle(() => task.value?.name || entry.value?.id);
 						<DeskField label="Entry date">
 							<div class="text-sm text-ink-900 py-1">
 								{{ fmtDate(entry.entryDate) }}
+							</div>
+						</DeskField>
+						<DeskField
+							v-if="entry.cumulativeQty != null && entry.quantityUom"
+							label="Cumulative quantity"
+						>
+							<div class="text-sm text-ink-900 py-1 tabular-nums">
+								{{ entry.cumulativeQty }} {{ entry.quantityUom }}
+								<span v-if="entry.progressInputMode === 'Quantity'" class="text-ink-500 text-xs">
+									(entered as quantity)
+								</span>
 							</div>
 						</DeskField>
 						<DeskField label="Cumulative progress">

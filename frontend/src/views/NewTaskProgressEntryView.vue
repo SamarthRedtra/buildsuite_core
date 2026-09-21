@@ -18,6 +18,11 @@ import DeskInput from "@/components/desk/DeskInput.vue";
 import DeskSelect from "@/components/desk/DeskSelect.vue";
 import DeskTextarea from "@/components/desk/DeskTextarea.vue";
 import DeskLinkPicker from "@/components/desk/DeskLinkPicker.vue";
+import {
+	useTaskProgressQuantity,
+	progressEntryFieldErrors,
+	buildProgressEntryPayload,
+} from "@/composables/useTaskProgressQuantity";
 
 const router = useRouter();
 const route = useRoute();
@@ -31,7 +36,9 @@ const form = reactive({
 	projectId: "",
 	taskId: cameFromTaskId || "",
 	entryDate: new Date().toISOString().slice(0, 10),
+	progressInputMode: "Percent",
 	progressPct: 0,
+	cumulativeQty: "",
 	narrative: "",
 	skilledLabour: 0,
 	unskilledLabour: 0,
@@ -43,6 +50,7 @@ const { errors, applyServerErrors, setErrors, clearError } = useFormErrors({
 	task: "taskId",
 	entry_date: "entryDate",
 	cumulative_progress: "progressPct",
+	cumulative_quantity: "cumulativeQty",
 	blocker_detail: "blockerNote",
 });
 const saving = ref(false);
@@ -198,6 +206,33 @@ watch(
 // can never go below it.
 const progressFloor = computed(() => Number(selectedTask.value?.progress) || 0);
 
+const {
+	progressInputMode,
+	progressScope,
+	scopeError,
+	scopeLoading,
+	quantityFloor,
+	scopeHint,
+} = useTaskProgressQuantity(() => form.taskId);
+
+watch(progressInputMode, (mode) => {
+	form.progressInputMode = mode;
+	if (mode === "Quantity") {
+		form.cumulativeQty = quantityFloor();
+	} else {
+		form.progressPct = progressFloor.value;
+	}
+});
+
+watch(
+	() => form.taskId,
+	() => {
+		if (progressInputMode.value === "Quantity") {
+			form.cumulativeQty = quantityFloor();
+		}
+	}
+);
+
 // Default the entry to the task's current cumulative progress whenever the
 // selected task resolves or changes. Mirrors TaskDetailView's openProgress().
 watch(
@@ -210,28 +245,34 @@ watch(
 // Live validation — surface the monotonic error the moment the value drops
 // below the floor (or out of range), instead of waiting for submit.
 watch(
-	() => [form.progressPct, progressFloor.value],
+	() => [
+		form.progressInputMode,
+		form.progressPct,
+		form.cumulativeQty,
+		progressFloor.value,
+		quantityFloor(),
+		progressScope.value?.scope_qty,
+		scopeError.value,
+	],
 	() => {
-		const raw = form.progressPct;
-		if (raw === "" || raw === null) {
-			clearError("progressPct");
-			return;
-		}
-		const pct = Number(raw);
-		if (Number.isNaN(pct) || pct > 100) {
-			errors.value = { ...errors.value, progressPct: "Progress must be between 0 and 100" };
-		} else if (pct <= 0) {
-			errors.value = {
-				...errors.value,
-				progressPct: "A progress entry can't be 0% — record the progress actually made.",
-			};
-		} else if (pct <= progressFloor.value) {
-			errors.value = {
-				...errors.value,
-				progressPct: `Progress must increase — enter a value above the current ${progressFloor.value}%. Entries are cumulative.`,
-			};
+		const fieldErrs = progressEntryFieldErrors({
+			mode: form.progressInputMode,
+			progressPct: form.progressPct,
+			cumulativeQty: form.cumulativeQty,
+			progressFloor: progressFloor.value,
+			quantityFloor: quantityFloor(),
+			scopeQty: progressScope.value?.scope_qty,
+			scopeError: scopeError.value,
+		});
+		if (fieldErrs.progressPct) {
+			errors.value = { ...errors.value, progressPct: fieldErrs.progressPct };
 		} else {
 			clearError("progressPct");
+		}
+		if (fieldErrs.cumulativeQty) {
+			errors.value = { ...errors.value, cumulativeQty: fieldErrs.cumulativeQty };
+		} else {
+			clearError("cumulativeQty");
 		}
 	}
 );
@@ -244,20 +285,32 @@ function clampProgress() {
 	form.progressPct = Math.min(100, Math.max(progressFloor.value, pct));
 }
 
+function clampQuantity() {
+	const floor = quantityFloor();
+	let q = Number(form.cumulativeQty);
+	if (Number.isNaN(q)) q = floor;
+	const maxQ = progressScope.value?.scope_qty || q;
+	form.cumulativeQty = Math.max(floor, Math.min(maxQ, q));
+}
+
 function validate() {
 	const e = {};
 	if (!form.projectId) e.projectId = "Project is required";
 	if (!form.taskId) e.taskId = "Task is required";
 	else if (selectedTask.value && Number(selectedTask.value.progress) >= 100)
 		e.taskId = "This task is already Completed — no further progress entries can be added.";
-	const pct = Number(form.progressPct);
-	if (Number.isNaN(pct) || pct > 100) {
-		e.progressPct = "Progress must be between 0 and 100";
-	} else if (pct <= 0) {
-		e.progressPct = "A progress entry can't be 0% — record the progress actually made.";
-	} else if (pct <= progressFloor.value) {
-		e.progressPct = `Progress must increase — enter a value above the current ${progressFloor.value}%. Entries are cumulative.`;
-	}
+	Object.assign(
+		e,
+		progressEntryFieldErrors({
+			mode: form.progressInputMode,
+			progressPct: form.progressPct,
+			cumulativeQty: form.cumulativeQty,
+			progressFloor: progressFloor.value,
+			quantityFloor: quantityFloor(),
+			scopeQty: progressScope.value?.scope_qty,
+			scopeError: scopeError.value,
+		})
+	);
 	if (form.blockerFlag && !form.blockerNote.trim()) {
 		e.blockerNote = "Describe the blocker";
 	}
@@ -269,17 +322,10 @@ async function save() {
 	if (!validate()) return;
 	saving.value = true;
 	try {
-		const created = await adapter.create("Task Progress Entry", {
-			task: form.taskId,
-			entry_date: form.entryDate,
-			cumulative_progress: Number(form.progressPct),
-			narrative: form.narrative,
-			skilled: Number(form.skilledLabour) || 0,
-			unskilled: Number(form.unskilledLabour) || 0,
-			weather: form.weather,
-			blocker: form.blockerFlag ? 1 : 0,
-			blocker_detail: form.blockerNote,
-		});
+		const created = await adapter.create(
+			"Task Progress Entry",
+			buildProgressEntryPayload({ ...form, taskId: form.taskId })
+		);
 
 		// Upload any pending attachments against the new entry via Frappe's native
 		// File pipeline. A failed upload is reported per-file but doesn't unwind the
@@ -394,7 +440,14 @@ const breadcrumbs = [
 				</DeskSection>
 
 				<DeskSection title="Progress" :cols="2">
+					<DeskField label="Input mode">
+						<DeskSelect v-model="progressInputMode">
+							<option value="Percent">Percent</option>
+							<option value="Quantity">Quantity (from BOQ scope)</option>
+						</DeskSelect>
+					</DeskField>
 					<DeskField
+						v-if="form.progressInputMode === 'Percent'"
 						label="Cumulative progress (%)"
 						required
 						:hint="`The NEW cumulative % after this entry — not a delta. Can't go below the current ${progressFloor}%.`"
@@ -410,6 +463,26 @@ const breadcrumbs = [
 							@blur="clampProgress"
 						/>
 					</DeskField>
+					<template v-else>
+						<DeskField
+							label="Cumulative quantity"
+							required
+							:hint="
+								scopeHint() ||
+								(scopeLoading ? 'Loading BOQ scope…' : 'Sum of planned qty on BOQ lines linked to this task.')
+							"
+							:error="errors.cumulativeQty"
+						>
+							<DeskInput
+								v-model="form.cumulativeQty"
+								type="number"
+								:min="quantityFloor()"
+								step="any"
+								@change="clampQuantity"
+								@blur="clampQuantity"
+							/>
+						</DeskField>
+					</template>
 					<div class="md:col-span-2">
 						<DeskField
 							label="Narrative"

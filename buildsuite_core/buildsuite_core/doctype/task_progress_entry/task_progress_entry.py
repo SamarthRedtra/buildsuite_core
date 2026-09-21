@@ -27,7 +27,13 @@ def revert_task_on_tpe_delete(tpe):
 	remaining = frappe.get_all(
 		"Task Progress Entry",
 		filters={"task": tpe.task, "name": ("!=", tpe.name)},
-		fields=["entry_date", "cumulative_progress", "owner"],
+		fields=[
+			"entry_date",
+			"cumulative_progress",
+			"cumulative_quantity",
+			"quantity_uom",
+			"owner",
+		],
 		order_by="entry_date asc, creation asc",
 	)
 
@@ -39,6 +45,8 @@ def revert_task_on_tpe_delete(tpe):
 			{
 				"date": row.entry_date,
 				"cumulative_progress": row.cumulative_progress,
+				"cumulative_quantity": row.cumulative_quantity,
+				"quantity_uom": row.quantity_uom,
 				"user": row.owner,
 			},
 		)
@@ -73,7 +81,10 @@ class TaskProgressEntry(Document):
 		blocker: DF.Check
 		blocker_detail: DF.SmallText | None
 		cumulative_progress: DF.Float
+		cumulative_quantity: DF.Float
 		entry_date: DF.Date
+		progress_input_mode: DF.Literal["Percent", "Quantity"]
+		quantity_uom: DF.Link | None
 		narrative: DF.SmallText | None
 		skilled: DF.Int
 		task: DF.Link
@@ -93,6 +104,11 @@ class TaskProgressEntry(Document):
 			frappe.throw(_("A blocker note is required when the blocker flag is set."))
 
 		self._reject_noop_edit()
+		from buildsuite_core.utils.task_progress_quantity import apply_quantity_input_mode
+
+		if not self.get("progress_input_mode"):
+			self.progress_input_mode = "Percent"
+		apply_quantity_input_mode(self)
 		self._validate_monotonic_progress()
 
 	def _block_if_predecessor_incomplete(self):
@@ -124,6 +140,9 @@ class TaskProgressEntry(Document):
 	# row, the save is a no-op and must be blocked (not logged as a duplicate).
 	_TRACKED_FIELDS = (
 		"cumulative_progress",
+		"progress_input_mode",
+		"cumulative_quantity",
+		"quantity_uom",
 		"entry_date",
 		"narrative",
 		"weather",
@@ -191,6 +210,8 @@ class TaskProgressEntry(Document):
 				{
 					"date": self.entry_date,
 					"cumulative_progress": self.cumulative_progress,
+					"cumulative_quantity": self.cumulative_quantity,
+					"quantity_uom": self.quantity_uom,
 					"user": self.owner,
 				},
 			)
@@ -213,6 +234,10 @@ class TaskProgressEntry(Document):
 		elif task.task_status in (None, "", "Yet To Start"):
 			task.task_status = "In Progress"
 		task.save(ignore_permissions=True)
+
+		from buildsuite_core.utils.task_progress_quantity import recalculate_boq_actuals_for_task
+
+		recalculate_boq_actuals_for_task(self.task)
 
 	def on_trash(self):
 		# Reverting on delete: drop this entry's detail row from the parent task,

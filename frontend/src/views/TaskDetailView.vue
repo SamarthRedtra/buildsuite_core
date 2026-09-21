@@ -37,6 +37,11 @@ import { setTaskAssignee, getTaskAssignee } from "@/data/taskAssignmentApi";
 import FileUploadHandler from "frappe-ui-file-upload-handler";
 import { fmtDate } from "@/utils/format";
 import { getWorkspaceIconPath } from "@/utils/workspaceIcons";
+import {
+	useTaskProgressQuantity,
+	progressEntryFieldErrors,
+	buildProgressEntryPayload,
+} from "@/composables/useTaskProgressQuantity";
 
 const props = defineProps({ id: String });
 const router = useRouter();
@@ -370,7 +375,9 @@ const savingProgress = ref(false);
 const progressForm = reactive({
 	entryDate: "",
 	enteredBy: "",
+	progressInputMode: "Percent",
 	progressPct: 0,
+	cumulativeQty: "",
 	narrative: "",
 	skilledLabour: 0,
 	unskilledLabour: 0,
@@ -404,8 +411,27 @@ const {
 	clearError: clearProgressError,
 } = useFormErrors({
 	cumulative_progress: "progressPct",
+	cumulative_quantity: "cumulativeQty",
 	entry_date: "entryDate",
 	blocker_detail: "blockerNote",
+});
+
+const {
+	progressInputMode: progressModalInputMode,
+	progressScope: progressModalScope,
+	scopeError: progressModalScopeError,
+	scopeLoading: progressModalScopeLoading,
+	quantityFloor: progressModalQuantityFloor,
+	scopeHint: progressModalScopeHint,
+} = useTaskProgressQuantity(() => props.id);
+
+watch(progressModalInputMode, (mode) => {
+	progressForm.progressInputMode = mode;
+	if (mode === "Quantity") {
+		progressForm.cumulativeQty = progressModalQuantityFloor();
+	} else {
+		progressForm.progressPct = task.value?.progress ?? 0;
+	}
 });
 
 // Pending attachments — files the user picked but haven't been persisted yet
@@ -479,7 +505,10 @@ function clearPendingAttachments() {
 function resetProgressForm() {
 	progressForm.entryDate = new Date().toISOString().slice(0, 10);
 	progressForm.enteredBy = store.user?.id || store.team[0]?.id || "";
+	progressModalInputMode.value = "Percent";
+	progressForm.progressInputMode = "Percent";
 	progressForm.progressPct = task.value?.progress ?? 0;
+	progressForm.cumulativeQty = progressModalQuantityFloor();
 	progressForm.narrative = "";
 	progressForm.skilledLabour = 0;
 	progressForm.unskilledLabour = 0;
@@ -500,17 +529,17 @@ function cancelProgressEntry() {
 	filingProgress.value = false;
 }
 function validateProgressEntry() {
-	const e = {};
-	const pct = Number(progressForm.progressPct);
-	const floor = Number(task.value?.progress) || 0;
-	if (Number.isNaN(pct) || pct > 100) {
-		e.progressPct = "Progress must be between 0 and 100";
-	} else if (pct <= 0) {
-		e.progressPct = "A progress entry can't be 0% — record the progress actually made.";
-	} else if (pct <= floor) {
-		// Progress is cumulative + strictly increasing — it must exceed the current value.
-		e.progressPct = `Progress must increase — enter a value above the current ${floor}%. Entries are cumulative.`;
-	}
+	const e = {
+		...progressEntryFieldErrors({
+			mode: progressForm.progressInputMode,
+			progressPct: progressForm.progressPct,
+			cumulativeQty: progressForm.cumulativeQty,
+			progressFloor: Number(task.value?.progress) || 0,
+			quantityFloor: progressModalQuantityFloor(),
+			scopeQty: progressModalScope.value?.scope_qty,
+			scopeError: progressModalScopeError.value,
+		}),
+	};
 	if (progressForm.blockerFlag && !progressForm.blockerNote.trim()) {
 		e.blockerNote = "Describe the blocker";
 	}
@@ -521,17 +550,10 @@ async function saveProgressEntry() {
 	if (!validateProgressEntry()) return;
 	savingProgress.value = true;
 	try {
-		const entry = await adapter.create("Task Progress Entry", {
-			task: props.id,
-			entry_date: progressForm.entryDate,
-			cumulative_progress: progressForm.progressPct,
-			narrative: progressForm.narrative,
-			skilled: progressForm.skilledLabour,
-			unskilled: progressForm.unskilledLabour,
-			weather: progressForm.weather,
-			blocker: progressForm.blockerFlag ? 1 : 0,
-			blocker_detail: progressForm.blockerNote,
-		});
+		const entry = await adapter.create(
+			"Task Progress Entry",
+			buildProgressEntryPayload({ ...progressForm, task: props.id })
+		);
 
 		// Upload any pending attachments against the new entry via Frappe's
 		// native File pipeline (creates File docs attached_to the TPE). A failed
@@ -1290,7 +1312,14 @@ usePageTitle(() => task.value?.name);
 					<!-- Modal body — the only scrolling region -->
 					<div class="p-5 overflow-y-auto flex-1">
 						<DeskSection title="Progress" :cols="2">
+							<DeskField label="Input mode">
+								<DeskSelect v-model="progressModalInputMode">
+									<option value="Percent">Percent</option>
+									<option value="Quantity">Quantity (from BOQ scope)</option>
+								</DeskSelect>
+							</DeskField>
 							<DeskField
+								v-if="progressForm.progressInputMode === 'Percent'"
 								label="Cumulative progress (%)"
 								required
 								:hint="`The NEW cumulative % after this entry — not a delta. Can't go below the current ${
@@ -1306,6 +1335,27 @@ usePageTitle(() => task.value?.name);
 									max="100"
 									step="1"
 									@input="clearProgressError('progressPct')"
+								/>
+							</DeskField>
+							<DeskField
+								v-else
+								label="Cumulative quantity"
+								required
+								:hint="
+									progressModalScopeHint() ||
+									(progressModalScopeLoading
+										? 'Loading BOQ scope…'
+										: 'Sum of planned qty on BOQ lines linked to this task.')
+								"
+								:error="progressErrors.cumulativeQty"
+							>
+								<DeskInput
+									v-model="progressForm.cumulativeQty"
+									data-test="field-progress-qty"
+									type="number"
+									:min="progressModalQuantityFloor()"
+									step="any"
+									@input="clearProgressError('cumulativeQty')"
 								/>
 							</DeskField>
 							<DeskField label="Entry date" :error="progressErrors.entryDate">

@@ -158,10 +158,8 @@ def explode_item(boq_item: str):
 # --- actuals --------------------------------------------------------------
 
 
-@frappe.whitelist()
-def recalculate_actuals(boq: str):
+def recalculate_actuals_internal(boq: str):
 	"""For items linked to a Task, set actual_qty = planned_qty x task.progress%."""
-	_require_write(boq)
 	frappe.flags.boq_skip_rollup = True
 	try:
 		for it in frappe.get_all(
@@ -181,6 +179,13 @@ def recalculate_actuals(boq: str):
 		frappe.flags.boq_skip_rollup = False
 	recompute_boq(boq)
 	return True
+
+
+@frappe.whitelist()
+def recalculate_actuals(boq: str):
+	"""For items linked to a Task, set actual_qty = planned_qty x task.progress%."""
+	_require_write(boq)
+	return recalculate_actuals_internal(boq)
 
 
 # --- clone / revisions ----------------------------------------------------

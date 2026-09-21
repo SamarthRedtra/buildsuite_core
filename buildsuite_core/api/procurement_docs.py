@@ -138,9 +138,9 @@ def save_material_request(
 	doc.transaction_date = doc.transaction_date or nowdate()
 	doc.schedule_date = schedule_date or doc.schedule_date
 
-	# ERPNext requires a target warehouse on stock lines; the prototype has no
-	# warehouse UI, so default to the company/project warehouse (harmless on services).
-	default_wh = _default_warehouse(doc.company)
+	# Procurement for a project lands in its site store. The company warehouse is
+	# only a fallback for projects created before project stores were introduced.
+	default_wh = _receiving_warehouse(project, doc.company)
 	doc.set("items", [])
 	for row in items:
 		if not row.get("item_code") or flt(row.get("qty")) <= 0:
@@ -380,8 +380,8 @@ def save_purchase_order(
 	doc.schedule_date = schedule_date or doc.schedule_date
 	doc.terms = terms
 
-	# Stock lines need a delivery warehouse (see save_material_request); default it.
-	default_wh = _default_warehouse(company)
+	# Keep the MR -> PO -> Receipt chain on the project's site store.
+	default_wh = _receiving_warehouse(project, company)
 	doc.set("items", [])
 	for row in items:
 		if not row.get("item_code") or flt(row.get("qty")) <= 0:
@@ -470,6 +470,18 @@ def _default_warehouse(company=None):
 	return frappe.db.get_value("Warehouse", filters, "name")
 
 
+def _receiving_warehouse(project=None, company=None):
+	"""Prefer the project's enabled leaf store, then fall back to the company default."""
+	if project:
+		filters = {"project": project, "is_group": 0, "disabled": 0}
+		if company:
+			filters["company"] = company
+		warehouse = frappe.db.get_value("Warehouse", filters, "name", order_by="creation desc")
+		if warehouse:
+			return warehouse
+	return _default_warehouse(company)
+
+
 def _serialize_pr(doc, ordered_by_poi=None):
 	ordered_by_poi = ordered_by_poi or {}
 	return {
@@ -544,9 +556,11 @@ def get_receipt_draft(purchase_order: str):
 		target = _make_purchase_receipt(purchase_order)
 	except Exception as e:  # fully received / closed / permission
 		frappe.throw(_("Can't receive against {0}: {1}").format(purchase_order, str(e)))
-	fallback = _default_warehouse(target.company)
+	fallback = _receiving_warehouse(target.project, target.company)
+	if fallback:
+		target.set_warehouse = fallback
 	for it in target.items:
-		it.warehouse = it.warehouse or fallback
+		it.warehouse = fallback or it.warehouse
 		# Default the editable received qty to the still-outstanding quantity.
 		it.received_qty = flt(it.received_qty) or flt(it.qty)
 	return _serialize_pr(target, _ordered_map(target.items))
@@ -554,20 +568,20 @@ def get_receipt_draft(purchase_order: str):
 
 def _apply_receipt_lines(doc, lines, warehouse=None):
 	"""Set each line's received qty from the payload; stamp a warehouse (chosen, else
-	the line's own, else the company default) since stock lines require one; drop lines
+	the project store, else the company default) since stock lines require one; drop lines
 	left at zero."""
 	by_poi = {l.get("purchase_order_item"): l for l in lines if l.get("purchase_order_item")}
 	by_item = {}
 	for l in lines:
 		by_item.setdefault(l.get("item_code"), l)
-	fallback = warehouse or _default_warehouse(doc.company)
+	fallback = warehouse or _receiving_warehouse(doc.project, doc.company)
 	for it in doc.items:
 		match = by_poi.get(it.purchase_order_item) or by_item.get(it.item_code)
 		qty = flt(match.get("received_qty")) if match else 0
 		it.received_qty = qty
 		it.qty = qty
 		it.rejected_qty = 0
-		it.warehouse = warehouse or it.warehouse or fallback
+		it.warehouse = fallback or it.warehouse
 	doc.set("items", [it for it in doc.items if flt(it.received_qty) > 0])
 
 

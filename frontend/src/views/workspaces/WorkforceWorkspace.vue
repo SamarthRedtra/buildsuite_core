@@ -14,6 +14,12 @@ const shortcuts = [
 	{ label: "Field Employees", icon: "hard-hat", to: "/field-employees" },
 	{ label: "Crews", icon: "users-2", to: "/crews" },
 	{ label: "Field Attendance", icon: "clipboard-list", to: "/field-attendance" },
+	{
+		label: "Labour Cost Sheets",
+		icon: "receipt",
+		description: "Post approved attendance and overtime to project cost.",
+		to: { name: "records-list", params: { doctype: "Labour Cost Sheet" } },
+	},
 ];
 
 const reports = [

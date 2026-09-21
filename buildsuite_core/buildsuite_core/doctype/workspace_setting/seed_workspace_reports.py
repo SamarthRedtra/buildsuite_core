@@ -196,3 +196,22 @@ def seed_workspace_reports():
 	if changed:
 		settings.flags.ignore_permissions = True
 		settings.save()
+
+
+def seed_workspace_doctypes():
+	"""Expose system-owned operational records through Redtra Suite's generic record UI."""
+	settings = frappe.get_single("Workspace Setting")
+	if any(row.document_type == "Labour Cost Sheet" for row in settings.doctypes):
+		return
+	settings.append(
+		"doctypes",
+		{
+			"workspace": "workforce",
+			"label": "Labour Cost Sheets",
+			"document_type": "Labour Cost Sheet",
+			"icon": "receipt",
+			"description": "Post approved attendance and overtime to project cost.",
+		},
+	)
+	settings.flags.ignore_permissions = True
+	settings.save()

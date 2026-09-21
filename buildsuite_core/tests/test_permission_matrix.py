@@ -291,6 +291,7 @@ PERSONA_CRUD_MATRIX = {
 		"Customer": "crwd",
 		"Supplier": "crwd",
 		"Expense Entry": "crwdsx",
+		"Labour Cost Sheet": "crwdsx",
 		"Petty Cash Request": "crwd",
 	},
 	"Foreman / Supervisor": {
@@ -300,6 +301,7 @@ PERSONA_CRUD_MATRIX = {
 		"Field Attendance": "crwdsx",  # the muster — full
 		"Labour Attendance Register": "r",  # derived register — read-only
 		"Overtime Attendance Register": "r",  # derived register — read-only
+		"Labour Cost Sheet": "r",
 		"Machinery": "r",
 		"Machinery Usage": "crw",  # not submittable — CRW is full; the ruling's S is N/A
 		"Project": "r",  # must read Project or the project-field selector is empty
@@ -316,6 +318,7 @@ PERSONA_CRUD_MATRIX = {
 		"Crew": "crwd",  # full
 		"Labour Attendance Register": "r",  # derived register — read-only
 		"Overtime Attendance Register": "r",  # derived register — read-only
+		"Labour Cost Sheet": "crwdsx",
 		"Machinery": "crw",  # register — maintain, no delete
 		"Machinery Type": "r",  # must read the type master or the selector is empty
 		"Customer": "crw",  # maintain, no delete
@@ -352,6 +355,7 @@ PERSONA_CRUD_MATRIX = {
 		"Measurement Book": "crwd",  # full — QS records + certifies measurements
 		"Labour Attendance Register": "r",  # derived register — read-only
 		"Overtime Attendance Register": "r",  # derived register — read-only
+		"Labour Cost Sheet": "r",
 		"Expense Entry": "cr",  # raises expenses — create + read
 		"Sales Invoice": "r",  # read-only (billing context, not raising)
 		"Project": "r",  # must read Project or the project-field selector is empty
@@ -364,6 +368,7 @@ PERSONA_CRUD_MATRIX = {
 		"Field Attendance": "crwdsx",  # the muster — full
 		"Labour Attendance Register": "r",  # derived register — read-only
 		"Overtime Attendance Register": "r",  # derived register — read-only
+		"Labour Cost Sheet": "r",
 		"Machinery": "r",  # register — read-only
 		"Machinery Usage": "crwd",  # usage log — full (not submittable, so the ruling's S/X are N/A)
 		"Expense Entry": "crw",  # raise + edit own draft; satisfies the "create + read" ruling
@@ -388,6 +393,7 @@ PERSONA_CRUD_MATRIX = {
 		"Crew": "crwd",  # full
 		"Labour Attendance Register": "r",  # read-only
 		"Overtime Attendance Register": "r",  # read-only
+		"Labour Cost Sheet": "crw",
 		"Petty Cash Request": "cr",  # create + read
 		"Expense Entry": "cr",  # create + read
 		"Payment Entry": "",  # advances — no access
@@ -407,6 +413,7 @@ PERSONA_CRUD_MATRIX = {
 		"Payment Entry": "crwdsx",  # full (customer/supplier advances + payments)
 		"Petty Cash Request": "crwd",  # full (not submittable, so S/X are N/A)
 		"Expense Entry": "crwdsx",  # full
+		"Labour Cost Sheet": "crwdsx",
 		"Employee": "r",  # Field Employee — read-only
 		"Field Attendance": "r",  # read-only
 		"Crew": "",  # no access

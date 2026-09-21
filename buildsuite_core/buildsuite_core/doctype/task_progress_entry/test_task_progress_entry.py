@@ -248,3 +248,68 @@ class TestTaskProgressEntry(BuildSuiteTestCase):
 		tpe.owner = "someone-else@example.com"
 		with self.assertRaises(frappe.CannotChangeConstantError):
 			tpe.save(ignore_permissions=True)
+
+	# --- quantity progress (BOQ scope) ------------------------------------
+	def _boq_line_for_task(self, project, task, planned_qty=318, unit="Nos"):
+		boq = frappe.get_doc(
+			{
+				"doctype": "BOQ",
+				"project": project,
+				"title": f"UAT BOQ {self._n}",
+				"margin_rate": 10,
+				"tax_rate": 18,
+			}
+		).insert(ignore_permissions=True)
+		group = frappe.get_doc(
+			{"doctype": "BOQ Group", "boq": boq.name, "code": "A", "group_name": "Civil"}
+		).insert(ignore_permissions=True)
+		item = frappe.get_doc(
+			{
+				"doctype": "BOQ Item",
+				"boq": boq.name,
+				"boq_group": group.name,
+				"code": f"A.{self._n}",
+				"description": "Waterproofing area",
+				"unit": unit,
+				"planned_qty": planned_qty,
+				"rate": 100,
+				"task": task,
+			}
+		).insert(ignore_permissions=True)
+		return boq, item
+
+	def test_quantity_mode_sets_progress_from_boq_scope(self):
+		p = self._make_project(company=self.company)
+		t = self._make_task(p.name)
+		self._boq_line_for_task(p.name, t.name, planned_qty=318)
+		tpe = self._file_tpe_quantity(t.name, 159)
+		t.reload()
+		self.assertEqual(t.progress, 50)
+		self.assertEqual(tpe.cumulative_progress, 50)
+		self.assertEqual(tpe.quantity_uom, "Nos")
+
+	def test_quantity_mode_monotonic_rejection(self):
+		p = self._make_project(company=self.company)
+		t = self._make_task(p.name)
+		self._boq_line_for_task(p.name, t.name, planned_qty=100)
+		self._file_tpe_quantity(t.name, 50)
+		before = frappe.db.count("Task Progress Entry", {"task": t.name})
+		with self.assertRaises(frappe.ValidationError):
+			self._file_tpe_quantity(t.name, 40)
+		self.assertEqual(frappe.db.count("Task Progress Entry", {"task": t.name}), before)
+
+	def test_quantity_mode_without_boq_throws(self):
+		p = self._make_project(company=self.company)
+		t = self._make_task(p.name)
+		with self.assertRaises(frappe.ValidationError):
+			self._file_tpe_quantity(t.name, 10)
+
+	def test_quantity_mode_syncs_boq_actual_qty(self):
+		p = self._make_project(company=self.company)
+		t = self._make_task(p.name)
+		boq, item = self._boq_line_for_task(p.name, t.name, planned_qty=318)
+		self._file_tpe_quantity(t.name, 159)
+		item.reload()
+		self.assertEqual(item.actual_qty, 159)
+		boq.reload()
+		self.assertEqual(boq.actual_amount, 159 * 100)

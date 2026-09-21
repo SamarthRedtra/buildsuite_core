@@ -45,3 +45,5 @@ buildsuite_core.patches.migrate_subcontract_advance_to_percentage # 2026-09-08 n
 buildsuite_core.patches.retire_boq_bill_accounting_dimension # 2026-09-13 legacy retirement cleanup
 buildsuite_core.patches.rename_redtra_suite_brand_labels # 2026-09-14 display-brand rename
 buildsuite_core.patches.promote_redtra_suite_desktop_icon # 2026-09-14 top-level app launcher icon
+buildsuite_core.patches.seed_labour_cost_sheet_permissions # 2026-09-17 attendance-backed project cost
+buildsuite_core.patches.seed_labour_cost_workspace # 2026-09-17 Redtra Suite workforce route

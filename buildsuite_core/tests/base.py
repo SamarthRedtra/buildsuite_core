@@ -58,7 +58,7 @@ class BuildSuiteTestCase(UnitTestCase):
 		doc.insert(ignore_permissions=True)
 		return doc
 
-	def _file_tpe(self, task, pct, blocker=0, blocker_detail=None):
+	def _file_tpe(self, task, pct, blocker=0, blocker_detail=None, **kwargs):
 		doc = frappe.get_doc(
 			{
 				"doctype": "Task Progress Entry",
@@ -67,10 +67,20 @@ class BuildSuiteTestCase(UnitTestCase):
 				"cumulative_progress": pct,
 				"blocker": blocker,
 				"blocker_detail": blocker_detail,
+				**kwargs,
 			}
 		)
 		doc.insert(ignore_permissions=True)
 		return doc
+
+	def _file_tpe_quantity(self, task, cumulative_quantity, **kwargs):
+		return self._file_tpe(
+			task,
+			0,
+			progress_input_mode="Quantity",
+			cumulative_quantity=cumulative_quantity,
+			**kwargs,
+		)
 
 	def _make_rate_master(self, rate=100, category="Material", uom="Nos"):
 		doc = frappe.get_doc(

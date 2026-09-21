@@ -8,6 +8,8 @@
  "field_order": [
   "date",
   "cumulative_progress",
+  "cumulative_quantity",
+  "quantity_uom",
   "narrative",
   "skilled",
   "unskilled",
@@ -29,6 +31,17 @@
    "in_list_view": 1,
    "label": "Cumulative progress",
    "precision": "0"
+  },
+  {
+   "fieldname": "cumulative_quantity",
+   "fieldtype": "Float",
+   "label": "Cumulative quantity"
+  },
+  {
+   "fieldname": "quantity_uom",
+   "fieldtype": "Link",
+   "label": "Quantity UOM",
+   "options": "UOM"
   },
   {
    "fieldname": "user",

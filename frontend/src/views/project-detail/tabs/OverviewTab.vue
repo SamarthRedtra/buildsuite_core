@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useDataStore } from "@/stores";
 import StatusBadge from "@/components/StatusBadge.vue";
@@ -7,6 +7,7 @@ import UserAvatar from "@/components/UserAvatar.vue";
 import { fmtDate, fmtCompactINR } from "@/utils/format";
 import { getWorkspaceIconPath } from "@/utils/workspaceIcons";
 import { usePermissions } from "@/composables/usePermissions";
+import { createDataAdapter } from "@/data/adapters";
 
 const { canEdit } = usePermissions();
 
@@ -50,6 +51,33 @@ const visibleReports = computed(() =>
 );
 
 const store = useDataStore();
+const adapter = createDataAdapter(store);
+const warehouseResource = ref(null);
+
+watch(
+	() => props.project?.id,
+	(project) => {
+		warehouseResource.value = project
+			? adapter.list("Warehouse", {
+					fields: ["name", "warehouse_name", "project"],
+					filters: {
+						project: ["=", project],
+						is_group: ["=", 0],
+						disabled: ["=", 0],
+					},
+					pageLength: 1,
+					cache: `buildsuite-project-warehouse:${project}`,
+			  })
+			: null;
+	},
+	{ immediate: true }
+);
+
+const projectWarehouse = computed(() => {
+	const rows = warehouseResource.value?.data;
+	const row = Array.isArray(rows) ? rows[0] : null;
+	return row?.warehouse_name || row?.name || "";
+});
 
 function plannedCost() {
 	if (props.activeBoq) return props.activeBoq.totals?.planned || 0;
@@ -440,6 +468,12 @@ function deviationColor(pct) {
 							<dt class="text-ink-500 font-medium">Location</dt>
 							<dd class="text-ink-800 truncate ml-2">
 								{{ project.location || "—" }}
+							</dd>
+						</div>
+						<div class="flex items-center justify-between px-4 py-2.5 text-xs">
+							<dt class="text-ink-500 font-medium">Project Store</dt>
+							<dd class="text-ink-800 truncate ml-2" :title="projectWarehouse">
+								{{ projectWarehouse || "—" }}
 							</dd>
 						</div>
 						<div class="flex items-center justify-between px-4 py-2.5 text-xs">

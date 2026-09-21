@@ -478,6 +478,12 @@ function openActualSource(e) {
 			"_blank",
 			"noopener"
 		);
+	} else if (e.source_doctype === "Labour Cost Sheet") {
+		window.open(
+			`/app/labour-cost-sheet/${encodeURIComponent(e.source_name)}`,
+			"_blank",
+			"noopener"
+		);
 	}
 }
 const COST_TYPE_TONE = {

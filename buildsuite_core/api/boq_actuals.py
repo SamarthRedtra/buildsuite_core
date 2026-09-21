@@ -3,7 +3,7 @@
 
 """BOQ actuals — the cost-code actuals log (BuildSuite Core · BOQ Actuals & Commitments).
 
-Real spend reaches the BOQ through the cost code, never through a BOQ record id. Three rails
+Real spend reaches the BOQ through the cost code, never through a BOQ record id. Four rails
 produce actual cost — Material Consumption (Stock Entry / Material Issue), Subcontractor Bill,
 and Expense Entry — each carrying a cost code (a group like "D" or an item like "D.02", scoped
 to the project). Which BOQ a code lands on is decided at read time by the Approved revision.
@@ -19,6 +19,7 @@ Rails (all post on Submit, reverse on Cancel):
   Material Consumption   qty x valuation rate  (Stock Entry.total_outgoing_value)  -> "Material"
   Subcontractor Bill     this-period amount    (Subcontractor Bill Line)           -> "Subcontract"
   Expense Entry          expense amount        (Expense Entry Table)               -> "Overhead"
+  Labour Cost Sheet      attendance wages      (Labour Cost Sheet)                 -> "Labour"
 
 Cost is recognised at consumption, not at purchase — a Purchase Receipt increases stock but
 does not touch BOQ actual. The Subcontractor Work Order (Committed) is a separate promise and
@@ -168,13 +169,58 @@ def _expense_entries(project):
 	return out
 
 
+def _labour_entries(project):
+	"""Submitted attendance-backed Labour Cost Sheets charged to a BOQ cost code."""
+	out = []
+	for row in frappe.get_all(
+		"Labour Cost Sheet",
+		filters={
+			"project": project,
+			"docstatus": 1,
+			"cost_code_type": ["in", ["Group", "Item"]],
+		},
+		fields=[
+			"name",
+			"posting_date",
+			"cost_code_type",
+			"cost_code_group",
+			"cost_code_item",
+			"cost_code_label",
+			"total_cost",
+		],
+	):
+		if not (row.cost_code_group or row.cost_code_item) or flt(row.total_cost) == 0:
+			continue
+		out.append(
+			{
+				"cost_code_type": row.cost_code_type,
+				"group_code": row.cost_code_group or "",
+				"item_code": row.cost_code_item or "",
+				"cost_type": "Labour",
+				"amount": flt(row.total_cost),
+				"source_doctype": "Labour Cost Sheet",
+				"source_name": row.name,
+				"source_line": None,
+				"party": None,
+				"date": str(row.posting_date) if row.posting_date else None,
+				"label": row.cost_code_label or "Labour cost",
+			}
+		)
+	return out
+
+
 def _actual_entries(project):
 	"""The full actuals log for a project — one line per contributing source line, across all
-	three rails. Derived live from submitted documents (never stored). This is the single source
+	four rails. Derived live from submitted documents (never stored). This is the single source
 	the summary and the drill-down both read, so they can never disagree (R2)."""
 	if not project:
 		return []
-	return _material_entries(project) + _subcontract_entries(project) + _expense_entries(project)
+	return (
+		_material_entries(project)
+		+ _subcontract_entries(project)
+		+ _expense_entries(project)
+		+ _labour_entries(project)
+	)
 
 
 # The cost types a group row reports, in display order. A type with no source shows "— pending",
