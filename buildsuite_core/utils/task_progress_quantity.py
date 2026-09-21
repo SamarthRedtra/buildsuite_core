@@ -49,6 +49,47 @@ def get_task_scope_from_boq(task):
 	}
 
 
+def get_tasks_scope_from_boq(task_ids):
+	"""Batch planned/actual qty per task. Mixed-UOM tasks are omitted (no throw)."""
+	ids = [t for t in (task_ids or []) if t and t != "__none__"]
+	if not ids:
+		return {}
+
+	rows = frappe.get_all(
+		"BOQ Item",
+		filters={"task": ["in", ids]},
+		fields=["task", "planned_qty", "actual_qty", "unit"],
+	)
+	by_task = {}
+	for row in rows:
+		planned = flt(row.planned_qty)
+		if planned <= 0:
+			continue
+		bucket = by_task.setdefault(row.task, {})
+		uom = (row.unit or "").strip()
+		slot = bucket.setdefault(uom, {"scope_qty": 0.0, "actual_qty": 0.0})
+		slot["scope_qty"] += planned
+		slot["actual_qty"] += flt(row.actual_qty)
+
+	out = {}
+	for task, by_uom in by_task.items():
+		if len(by_uom) != 1:
+			continue
+		uom, slot = next(iter(by_uom.items()))
+		out[task] = {
+			"scope_qty": flt(slot["scope_qty"]),
+			"actual_qty": flt(slot["actual_qty"]),
+			"uom": uom or None,
+		}
+	return out
+
+
+def quantity_from_progress(scope_qty, progress):
+	if not flt(scope_qty):
+		return 0.0
+	return flt(scope_qty) * flt(progress) / 100.0
+
+
 def quantity_to_progress(task, cumulative_quantity):
 	scope = get_task_scope_from_boq(task)
 	if not scope["scope_qty"]:

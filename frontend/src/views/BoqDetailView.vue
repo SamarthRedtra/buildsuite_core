@@ -214,10 +214,10 @@ function boqSubItemsByItem(itemId) {
 }
 const boqItemsByBoq = computed(() => allItems.value);
 
-// Shared 10-column grid for the tree header + group / item / sub-item rows so every
+// Shared 15-column grid for the tree header + group / item / sub-item rows so every
 // level lines up. Without it the rows have no column template and collapse.
 const treeGridStyle =
-	"grid-template-columns: 28px 80px minmax(240px, 1fr) 80px 90px 100px 110px 120px 110px 110px 120px 80px 110px; min-width: 1360px;";
+	"grid-template-columns: 28px 80px minmax(240px, 1fr) 80px 90px 90px 90px 100px 110px 120px 110px 110px 120px 80px 110px; min-width: 1540px;";
 
 const totals = computed(() => {
 	const planned = allItems.value.reduce((a, i) => a + (i.plannedAmount || 0), 0);
@@ -415,6 +415,9 @@ function groupActual(group) {
 }
 function itemActual(item) {
 	return actualsSummary.value.by_item[item.code]?.actual || 0;
+}
+function remainingQty(item) {
+	return Math.max(0, (Number(item.plannedQty) || 0) - (Number(item.actualQty) || 0));
 }
 // Coverage: how much of a group's actual is tracked at item level vs coded to the group only —
 // so a partly coded group is never mistaken for a fully attributed one.
@@ -1414,10 +1417,12 @@ const breadcrumbs = computed(() => {
 					<div class="px-3 py-2">Description</div>
 					<div class="px-3 py-2">Unit</div>
 					<div class="px-3 py-2 text-right">Plan Qty</div>
+					<div class="px-3 py-2 text-right">Act Qty</div>
+					<div class="px-3 py-2 text-right">Remain</div>
 					<div class="px-3 py-2 text-right">Rate (₹)</div>
 					<div class="px-3 py-2 text-right">Planned</div>
 					<div class="px-3 py-2 text-right">Committed</div>
-					<div class="px-3 py-2 text-right">Actual</div>
+					<div class="px-3 py-2 text-right">Cost actual</div>
 					<div class="px-3 py-2 text-right">Variance</div>
 					<div class="px-3 py-2">WP</div>
 					<div class="px-3 py-2 text-center">Task</div>
@@ -1443,6 +1448,8 @@ const breadcrumbs = computed(() => {
 						<div class="px-3 py-2 text-sm font-semibold text-ink-900">
 							{{ g.name }}
 						</div>
+						<div></div>
+						<div></div>
 						<div></div>
 						<div></div>
 						<div class="px-3 py-2 text-right text-[11px] text-ink-500">
@@ -1657,6 +1664,20 @@ const breadcrumbs = computed(() => {
 								<div
 									class="px-3 py-1.5 text-right tabular-nums text-sm text-ink-700"
 								>
+									{{
+										item.actualQty
+											? Number(item.actualQty).toLocaleString("en-IN")
+											: "—"
+									}}
+								</div>
+								<div
+									class="px-3 py-1.5 text-right tabular-nums text-sm text-ink-500"
+								>
+									{{ remainingQty(item).toLocaleString("en-IN") }}
+								</div>
+								<div
+									class="px-3 py-1.5 text-right tabular-nums text-sm text-ink-700"
+								>
 									{{ item.rate.toLocaleString("en-IN") }}
 								</div>
 								<div
@@ -1786,6 +1807,8 @@ const breadcrumbs = computed(() => {
 									>
 										{{ si.qtyPerUnit }}
 									</div>
+									<div></div>
+									<div></div>
 									<div
 										class="px-3 py-1 text-right tabular-nums text-xs text-ink-500"
 									>
@@ -1869,6 +1892,8 @@ const breadcrumbs = computed(() => {
 									<div></div>
 									<div></div>
 									<div></div>
+									<div></div>
+									<div></div>
 								</div>
 
 								<!-- Inline "+ Add Sub-item" affordance (hidden while searching) -->
@@ -1895,6 +1920,8 @@ const breadcrumbs = computed(() => {
 									<div></div>
 									<div></div>
 									<div></div>
+									<div></div>
+									<div></div>
 								</div>
 							</template>
 						</template>
@@ -1911,6 +1938,8 @@ const breadcrumbs = computed(() => {
 							<div class="px-3 py-1.5 text-xs text-brand-700 font-medium">
 								+ Add item to {{ g.code }} — {{ g.name }}
 							</div>
+							<div></div>
+							<div></div>
 							<div></div>
 							<div></div>
 							<div></div>

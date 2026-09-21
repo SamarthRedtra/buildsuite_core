@@ -14,6 +14,16 @@ import StatusBadge from "@/components/StatusBadge.vue";
 import { fmtINR, fmtCompactINR, fmtDate } from "@/utils/format";
 import { getProgressReport } from "@/data/progressReportApi";
 
+function fmtQty(n) {
+	if (n == null || Number.isNaN(Number(n))) return "";
+	return Number(n).toLocaleString("en-IN", { maximumFractionDigits: 3 });
+}
+function qtyPair(row) {
+	if (!row?.planned_qty) return "";
+	const uom = row.uom ? ` ${row.uom}` : "";
+	return `${fmtQty(row.actual_qty)} / ${fmtQty(row.planned_qty)}${uom}`;
+}
+
 const route = useRoute();
 const router = useRouter();
 
@@ -674,6 +684,7 @@ function backToProject() {
 								<th class="text-left px-3 py-2">Status</th>
 								<th class="text-right px-3 py-2">Moved</th>
 								<th class="text-right px-3 py-2">Progress</th>
+								<th class="text-right px-3 py-2">Qty</th>
 								<th class="text-left px-3 py-2">Last update</th>
 							</tr>
 						</thead>
@@ -690,9 +701,19 @@ function backToProject() {
 									:class="t.delta > 0 ? 'text-success-700' : 'text-ink-400'"
 								>
 									{{ t.delta > 0 ? "+" : "" }}{{ t.delta }}%
+									<div
+										v-if="t.quantity_delta"
+										class="text-[10px] text-ink-500 font-normal"
+									>
+										{{ t.quantity_delta > 0 ? "+" : "" }}{{ fmtQty(t.quantity_delta)
+										}}{{ t.uom ? ` ${t.uom}` : "" }}
+									</div>
 								</td>
 								<td class="px-3 py-2 text-right tabular-nums text-ink-700">
 									{{ t.progress }}%
+								</td>
+								<td class="px-3 py-2 text-right tabular-nums text-ink-700">
+									{{ qtyPair(t) || "—" }}
 								</td>
 								<td class="px-3 py-2 text-ink-500">
 									{{ fmtDate(t.last_update) }}
@@ -957,6 +978,7 @@ function backToProject() {
 								<th class="text-left px-3 py-2">Task</th>
 								<th class="text-left px-3 py-2">Status</th>
 								<th class="text-right px-3 py-2">Progress</th>
+								<th class="text-right px-3 py-2">Qty</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -972,6 +994,9 @@ function backToProject() {
 								<td class="px-3 py-2"><StatusBadge :status="t.status" /></td>
 								<td class="px-3 py-2 text-right tabular-nums text-ink-700">
 									{{ t.progress }}%
+								</td>
+								<td class="px-3 py-2 text-right tabular-nums text-ink-700">
+									{{ qtyPair(t) || "—" }}
 								</td>
 							</tr>
 						</tbody>

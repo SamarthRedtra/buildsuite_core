@@ -37,6 +37,8 @@ const entriesResource = adapter.list("Task Progress Entry", {
 		"task",
 		"entry_date",
 		"cumulative_progress",
+		"cumulative_quantity",
+		"quantity_uom",
 		"skilled",
 		"unskilled",
 		"weather",
@@ -55,6 +57,11 @@ const entriesResource = adapter.list("Task Progress Entry", {
 			task: row?.task || "",
 			entryDate: row?.entry_date || null,
 			progressPct: Number(row?.cumulative_progress) || 0,
+			cumulativeQty:
+				row?.cumulative_quantity != null && row.cumulative_quantity !== ""
+					? Number(row.cumulative_quantity)
+					: null,
+			quantityUom: row?.quantity_uom || "",
 			narrative: row?.narrative || "",
 			skilledLabour: Number(row?.skilled) || 0,
 			unskilledLabour: Number(row?.unskilled) || 0,
@@ -311,8 +318,13 @@ function onRowClick(row) {
 							:style="`width:${row.progressPct}%`"
 						></div>
 					</div>
-					<span class="text-xs tabular-nums w-8 text-right font-medium"
-						>{{ row.progressPct }}%</span
+					<span class="text-xs tabular-nums text-right font-medium whitespace-nowrap"
+						>{{ row.progressPct }}%
+						<span
+							v-if="row.cumulativeQty != null && row.quantityUom"
+							class="text-ink-500 font-normal"
+							>· {{ row.cumulativeQty }} {{ row.quantityUom }}</span
+						></span
 					>
 				</div>
 			</template>

@@ -42,6 +42,7 @@ import {
 	progressEntryFieldErrors,
 	buildProgressEntryPayload,
 } from "@/composables/useTaskProgressQuantity";
+import { getTaskProgressScope } from "@/utils/taskProgressApi";
 
 const props = defineProps({ id: String });
 const router = useRouter();
@@ -332,6 +333,8 @@ const entriesResource = adapter.list("Task Progress Entry", {
 		"task",
 		"entry_date",
 		"cumulative_progress",
+		"cumulative_quantity",
+		"quantity_uom",
 		"narrative",
 		"skilled",
 		"unskilled",
@@ -348,6 +351,11 @@ const entriesResource = adapter.list("Task Progress Entry", {
 			task: row?.task || "",
 			entryDate: row?.entry_date || null,
 			progressPct: Number(row?.cumulative_progress) || 0,
+			cumulativeQty:
+				row?.cumulative_quantity != null && row.cumulative_quantity !== ""
+					? Number(row.cumulative_quantity)
+					: null,
+			quantityUom: row?.quantity_uom || "",
 			narrative: row?.narrative || "",
 			skilledLabour: Number(row?.skilled) || 0,
 			unskilledLabour: Number(row?.unskilled) || 0,
@@ -363,6 +371,25 @@ const entryRows = computed(() => resourceRows(entriesResource));
 const recentEntries = computed(() => entryRows.value.slice(0, 3));
 const entryCount = computed(() => entryRows.value.length);
 const latestEntry = computed(() => entryRows.value[0] || null);
+
+const taskProgressScope = ref(null);
+async function loadTaskProgressScope(id = props.id) {
+	taskProgressScope.value = null;
+	if (!id) return;
+	try {
+		taskProgressScope.value = await getTaskProgressScope(id);
+	} catch (_) {
+		taskProgressScope.value = null;
+	}
+}
+watch(() => props.id, loadTaskProgressScope, { immediate: true });
+const taskQtyHint = computed(() => {
+	const s = taskProgressScope.value;
+	if (!s?.scope_qty) return "";
+	const done = Number(s.progress_floor_qty) || 0;
+	const uom = s.uom ? ` ${s.uom}` : "";
+	return `${done} / ${s.scope_qty}${uom}`;
+});
 
 // ----- File Progress Entry modal -----------------------------------------
 // Replaces the previous route-jump to /app/progress-entries/new. Keeps the
@@ -576,7 +603,11 @@ async function saveProgressEntry() {
 		filingProgress.value = false;
 
 		// Refresh task and entries list
-		await Promise.all([taskResource.value?.reload?.(), entriesResource.fetch()]);
+		await Promise.all([
+			taskResource.value?.reload?.(),
+			entriesResource.fetch(),
+			loadTaskProgressScope(),
+		]);
 		showToast("Progress entry filed");
 	} catch (err) {
 		const summary = applyProgressErrors(err);
@@ -845,16 +876,27 @@ usePageTitle(() => task.value?.name);
 								/>
 							</div>
 							<span
-								class="text-2xl font-semibold text-ink-900 tabular-nums w-16 text-right"
+								class="text-2xl font-semibold text-ink-900 tabular-nums text-right whitespace-nowrap"
 								>{{ task.progress }}%</span
 							>
+						</div>
+						<div v-if="taskQtyHint" class="text-xs text-ink-600 tabular-nums mt-1.5">
+							{{ taskQtyHint }} completed
 						</div>
 						<div class="text-[11px] text-ink-500 mt-3">
 							<template v-if="latestEntry">
 								Latest:
 								<DeskLink :to="`/progress-entries/${latestEntry.id}`"
-									>{{ latestEntry.progressPct }}% on
-									{{ fmtDate(latestEntry.entryDate) }}</DeskLink
+									>{{ latestEntry.progressPct }}%
+									<template
+										v-if="
+											latestEntry.cumulativeQty != null &&
+											latestEntry.quantityUom
+										"
+										>· {{ latestEntry.cumulativeQty }}
+										{{ latestEntry.quantityUom }}
+									</template>
+									on {{ fmtDate(latestEntry.entryDate) }}</DeskLink
 								>
 								by <UserAvatar :user-id="latestEntry.enteredBy" size="xs" /> ·
 								{{ entryCount }} {{ entryCount === 1 ? "entry" : "entries" }} total
@@ -1102,7 +1144,12 @@ usePageTitle(() => task.value?.name);
 							<DeskLink
 								:to="`/progress-entries/${e.id}`"
 								class="font-medium tabular-nums"
-								>{{ e.progressPct }}%</DeskLink
+								>{{ e.progressPct }}%
+								<span
+									v-if="e.cumulativeQty != null && e.quantityUom"
+									class="text-ink-500 font-normal"
+									>· {{ e.cumulativeQty }} {{ e.quantityUom }}</span
+								></DeskLink
 							>
 							<span class="text-ink-500 flex-1 truncate">{{
 								fmtDate(e.entryDate)

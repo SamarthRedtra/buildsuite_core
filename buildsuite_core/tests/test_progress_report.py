@@ -51,3 +51,45 @@ class TestProgressReport(BuildSuiteTestCase):
 
 	def test_missing_project_throws(self):
 		self.assertRaises(frappe.ValidationError, pr.get_progress_report, project="NOPE-DOES-NOT-EXIST")
+
+	def _boq_line_for_task(self, project, task, planned_qty=318, unit="Nos"):
+		boq = frappe.get_doc(
+			{
+				"doctype": "BOQ",
+				"project": project,
+				"title": f"UAT BOQ {self._n}",
+				"margin_rate": 10,
+				"tax_rate": 18,
+			}
+		).insert(ignore_permissions=True)
+		group = frappe.get_doc(
+			{"doctype": "BOQ Group", "boq": boq.name, "code": "A", "group_name": "Civil"}
+		).insert(ignore_permissions=True)
+		item = frappe.get_doc(
+			{
+				"doctype": "BOQ Item",
+				"boq": boq.name,
+				"boq_group": group.name,
+				"code": f"A.{self._n}",
+				"description": "Waterproofing area",
+				"unit": unit,
+				"planned_qty": planned_qty,
+				"rate": 100,
+				"task": task,
+			}
+		).insert(ignore_permissions=True)
+		return boq, item
+
+	def test_task_activity_includes_boq_quantity(self):
+		p = self._make_project(company=self.company)
+		t = self._make_task(p.name, task_status="In Progress")
+		self._boq_line_for_task(p.name, t.name, planned_qty=318)
+		self._file_tpe_quantity(t.name, 159)
+
+		rep = pr.get_progress_report(p.name, period="weekly")
+		row = next(r for r in rep["task_activity"] if r["id"] == t.name)
+		self.assertEqual(row["planned_qty"], 318)
+		self.assertEqual(row["actual_qty"], 159)
+		self.assertEqual(row["uom"], "Nos")
+		self.assertEqual(row["quantity_delta"], 159)
+		self.assertEqual(row["progress"], 50)

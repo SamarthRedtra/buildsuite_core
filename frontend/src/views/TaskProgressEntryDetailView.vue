@@ -103,6 +103,11 @@ const entry = computed(() => {
 		task: local.taskId || local.task || "",
 		entryDate: local.entryDate || local.entry_date || null,
 		progressPct: Number(local.progressPct ?? local.progress_pct) || 0,
+		cumulativeQty:
+			local.cumulativeQty ??
+			(local.cumulative_quantity != null ? Number(local.cumulative_quantity) : null),
+		quantityUom: local.quantityUom || local.quantity_uom || "",
+		progressInputMode: local.progressInputMode || local.progress_input_mode || "Percent",
 		narrative: local.narrative || "",
 		skilledLabour: Number(local.skilledLabour ?? local.skilled_labour) || 0,
 		unskilledLabour: Number(local.unskilledLabour ?? local.unskilled_labour) || 0,
@@ -200,7 +205,7 @@ function loadLatestEntriesResource(taskId) {
 	}
 	latestEntriesResource.value = adapter.list("Task Progress Entry", {
 		filters: [["task", "=", taskId]],
-		fields: ["name", "entry_date", "cumulative_progress"],
+		fields: ["name", "entry_date", "cumulative_progress", "cumulative_quantity", "quantity_uom"],
 		orderBy: "entry_date desc",
 		pageLength: 1,
 		transform(rows) {
@@ -208,6 +213,11 @@ function loadLatestEntriesResource(taskId) {
 				id: row?.name || "",
 				entryDate: row?.entry_date || null,
 				progressPct: Number(row?.cumulative_progress) || 0,
+				cumulativeQty:
+					row?.cumulative_quantity != null && row.cumulative_quantity !== ""
+						? Number(row.cumulative_quantity)
+						: null,
+				quantityUom: row?.quantity_uom || "",
 			}));
 		},
 	});
@@ -511,7 +521,17 @@ usePageTitle(() => task.value?.name || entry.value?.id);
 								:to="`/progress-entries/${latestOnTask.id}`"
 								class="font-medium"
 							>
-								{{ latestOnTask.progressPct }}% ({{ latestOnTask.id }})
+								{{ latestOnTask.progressPct }}%
+								<template
+									v-if="
+										latestOnTask.cumulativeQty != null &&
+										latestOnTask.quantityUom
+									"
+								>
+									· {{ latestOnTask.cumulativeQty }}
+									{{ latestOnTask.quantityUom }}
+								</template>
+								({{ latestOnTask.id }})
 							</DeskLink>
 						</span>
 					</template>
@@ -569,8 +589,16 @@ usePageTitle(() => task.value?.name || entry.value?.id);
 									></div>
 								</div>
 								<span
-									class="text-base font-semibold tabular-nums text-ink-900 w-12 text-right"
-									>{{ entry.progressPct }}%</span
+									class="text-base font-semibold tabular-nums text-ink-900 text-right whitespace-nowrap"
+									>{{ entry.progressPct }}%
+									<template
+										v-if="entry.cumulativeQty != null && entry.quantityUom"
+									>
+										<span class="text-sm font-normal text-ink-600"
+											>· {{ entry.cumulativeQty }}
+											{{ entry.quantityUom }}</span
+										>
+									</template></span
 								>
 							</div>
 						</DeskField>

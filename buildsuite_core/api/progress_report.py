@@ -20,6 +20,10 @@ import frappe
 from frappe.utils import add_days, cint, date_diff, flt, getdate, nowdate
 
 from buildsuite_core.api.project_dashboard import _subprojects
+from buildsuite_core.utils.task_progress_quantity import (
+	get_tasks_scope_from_boq,
+	quantity_from_progress,
+)
 
 _ACTIVE_TASK_DONE = "Completed"
 _SPANS = {"daily": 1, "weekly": 7, "monthly": 30}
@@ -65,6 +69,33 @@ def _in(d, start, end):
 	return bool(d) and start <= getdate(d) <= end
 
 
+def _entry_qty(entry, scopes):
+	"""Cumulative qty on a TPE, or derived from BOQ scope × progress%."""
+	qty = entry.get("cumulative_quantity")
+	if qty is not None and flt(qty) > 0:
+		return flt(qty)
+	scope = scopes.get(entry.task) or {}
+	scope_qty = flt(scope.get("scope_qty"))
+	if not scope_qty:
+		return None
+	return quantity_from_progress(scope_qty, entry.cumulative_progress)
+
+
+def _qty_fields(task_name, progress, scopes):
+	scope = scopes.get(task_name) or {}
+	scope_qty = flt(scope.get("scope_qty"))
+	if not scope_qty:
+		return {"planned_qty": None, "actual_qty": None, "uom": None}
+	actual = scope.get("actual_qty")
+	if actual is None or flt(actual) <= 0:
+		actual = quantity_from_progress(scope_qty, progress)
+	return {
+		"planned_qty": scope_qty,
+		"actual_qty": flt(actual),
+		"uom": scope.get("uom"),
+	}
+
+
 @frappe.whitelist()
 def get_progress_report(project: str, period: str = "weekly", date: str | None = None, audience: str = "client"):
 	if not project or not frappe.db.exists("Project", project):
@@ -105,17 +136,21 @@ def get_progress_report(project: str, period: str = "weekly", date: str | None =
 		filters={"project": ["in", scope_ids]},
 		fields=["name", "subject", "task_status", "progress", "exp_end_date"],
 	)
-	task_ids = [t.name for t in tasks] or ["__none__"]
+	task_ids = [t.name for t in tasks]
+	scopes = get_tasks_scope_from_boq(task_ids)
+	query_task_ids = task_ids or ["__none__"]
 
 	# latest progress-entry date per task (for "completed in period" + last-update)
 	entries = frappe.get_all(
 		"Task Progress Entry",
-		filters={"task": ["in", task_ids]},
+		filters={"task": ["in", query_task_ids]},
 		fields=[
 			"name",
 			"task",
 			"entry_date",
 			"cumulative_progress",
+			"cumulative_quantity",
+			"quantity_uom",
 			"skilled",
 			"unskilled",
 			"blocker",
@@ -127,13 +162,19 @@ def get_progress_report(project: str, period: str = "weekly", date: str | None =
 	# entries are newest-first; per task track the latest date + the progress at the
 	# window end (closing) and just before the window (opening) → the period's delta.
 	latest_entry, closing_prog, opening_prog = {}, {}, {}
+	closing_qty, opening_qty = {}, {}
 	for e in entries:
 		latest_entry.setdefault(e.task, e.entry_date)
 		d = getdate(e.entry_date) if e.entry_date else None
+		qty = _entry_qty(e, scopes)
 		if d and d <= end and e.task not in closing_prog:
 			closing_prog[e.task] = flt(e.cumulative_progress)
+			if qty is not None:
+				closing_qty[e.task] = qty
 		if d and d < start and e.task not in opening_prog:
 			opening_prog[e.task] = flt(e.cumulative_progress)
+			if qty is not None:
+				opening_qty[e.task] = qty
 
 	entries_in = [e for e in entries if _in(e.entry_date, start, end)]
 	entry_task_ids = {e.task for e in entries_in}
@@ -174,6 +215,15 @@ def get_progress_report(project: str, period: str = "weekly", date: str | None =
 				"progress": flt(t.progress),
 				"delta": round(closing_prog.get(t.name, flt(t.progress)) - opening_prog.get(t.name, 0.0), 1),
 				"last_update": str(latest_entry.get(t.name)) if latest_entry.get(t.name) else None,
+				**_qty_fields(t.name, t.progress, scopes),
+				"quantity_delta": (
+					round(
+						closing_qty.get(t.name, 0.0) - opening_qty.get(t.name, 0.0),
+						3,
+					)
+					if t.name in closing_qty or t.name in opening_qty
+					else None
+				),
 			}
 			for t in tasks
 			if t.name in entry_task_ids
@@ -389,6 +439,7 @@ def get_progress_report(project: str, period: str = "weekly", date: str | None =
 				"name": t.subject or t.name,
 				"status": t.task_status or "Yet To Start",
 				"progress": flt(t.progress),
+				**_qty_fields(t.name, t.progress, scopes),
 			}
 			for t in tasks
 			if t.task_status != _ACTIVE_TASK_DONE and _in(t.exp_end_date, la_start, la_end)
