@@ -16,6 +16,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, nowdate
 
+from buildsuite_core.utils.procurement_party import apply_party_fields
 from buildsuite_core.utils.project import default_company
 
 MATERIAL_REQUEST = "Material Request"
@@ -72,6 +73,9 @@ def _serialize_mr(doc):
 		"state": _state(doc),
 		"status": doc.status,
 		"amended_from": doc.get("amended_from"),
+		"party_type": doc.get("custom_party_type") or "",
+		"party": doc.get("custom_party") or "",
+		"party_name": doc.get("custom_party_name") or "",
 		"per_ordered": flt(doc.per_ordered),
 		"company": doc.company,
 		"total": sum(flt(it.qty) * flt(it.rate) for it in doc.items),
@@ -119,6 +123,8 @@ def save_material_request(
 	project: str | None = None,
 	schedule_date: str | None = None,
 	items: str | None = None,
+	party_type: str | None = None,
+	party: str | None = None,
 ):
 	"""Create / update a draft Material Request (Purchase type). One project for the
 	whole request, stamped on every line + used to anchor the company."""
@@ -137,6 +143,7 @@ def save_material_request(
 	doc.project = project  # mandatory parent custom field on Material Request in this app
 	doc.transaction_date = doc.transaction_date or nowdate()
 	doc.schedule_date = schedule_date or doc.schedule_date
+	apply_party_fields(doc, party_type, party)
 
 	# Procurement for a project lands in its site store. The company warehouse is
 	# only a fallback for projects created before project stores were introduced.

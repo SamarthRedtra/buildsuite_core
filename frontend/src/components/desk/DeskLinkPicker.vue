@@ -192,6 +192,7 @@ watchDebounced(
 	query,
 	() => {
 		optionsResource.update({
+			doctype: props.doctype,
 			fields: resolvedFields.value,
 			filters: serverFilters.value,
 			orFilters: serverOrFilters.value,
@@ -208,7 +209,11 @@ watch(
 	() => props.doctype,
 	() => {
 		query.value = "";
+		// Drop stale rows from the previous DocType before the new fetch lands.
+		optionsResource.setData?.([]);
+		selectedResource.setData?.([]);
 		optionsResource.update({
+			doctype: props.doctype,
 			fields: resolvedFields.value,
 			filters: serverFilters.value,
 			orFilters: [],
@@ -225,6 +230,7 @@ watch(
 	() => props.filters,
 	() => {
 		optionsResource.update({
+			doctype: props.doctype,
 			fields: resolvedFields.value,
 			filters: serverFilters.value,
 			orFilters: serverOrFilters.value,
@@ -252,6 +258,7 @@ function fetchSelectedRecord() {
 	}
 
 	selectedResource.update({
+		doctype: props.doctype,
 		fields: resolvedFields.value,
 		filters: [[props.valueField, "=", props.modelValue]],
 		orderBy: listOrderBy.value,

@@ -214,7 +214,7 @@ const breadcrumbs = computed(() => [
 		</div>
 
 		<!-- Summary strip -->
-		<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+		<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
 			<div class="bg-white border border-ink-200 rounded-lg p-3">
 				<div class="text-[10px] uppercase tracking-wider text-ink-500">Project</div>
 				<DeskLink :to="`/projects/${mr.project}`" class="text-sm">{{
@@ -232,6 +232,16 @@ const breadcrumbs = computed(() => [
 				<div class="text-sm text-ink-900 mt-0.5">
 					{{ mr.schedule_date ? fmtDate(mr.schedule_date) : "—" }}
 				</div>
+			</div>
+			<div class="bg-white border border-ink-200 rounded-lg p-3">
+				<div class="text-[10px] uppercase tracking-wider text-ink-500">Party</div>
+				<div v-if="mr.party_name || mr.party" class="text-sm text-ink-900 mt-0.5">
+					{{ mr.party_name || mr.party }}
+					<span v-if="mr.party_type" class="text-[11px] text-ink-500"
+						>· {{ mr.party_type }}</span
+					>
+				</div>
+				<div v-else class="text-sm text-ink-400 mt-0.5">—</div>
 			</div>
 			<div class="bg-white border border-ink-200 rounded-lg p-3">
 				<div class="text-[10px] uppercase tracking-wider text-ink-500">

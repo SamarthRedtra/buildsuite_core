@@ -256,7 +256,7 @@ const breadcrumbs = computed(() => [
 		</div>
 
 		<!-- Summary strip -->
-		<div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+		<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
 			<div class="bg-white border border-ink-200 px-3 py-2" style="border-radius: 6px">
 				<div class="text-[10px] uppercase tracking-wider text-ink-500 font-medium">
 					Project
@@ -277,6 +277,18 @@ const breadcrumbs = computed(() => [
 					>{{ doc.cost_code_label }}</span
 				>
 				<div v-else class="text-sm text-ink-400 mt-0.5">Not cost-coded</div>
+			</div>
+			<div class="bg-white border border-ink-200 px-3 py-2" style="border-radius: 6px">
+				<div class="text-[10px] uppercase tracking-wider text-ink-500 font-medium">
+					Party
+				</div>
+				<div v-if="doc.party_name || doc.party" class="text-sm text-ink-900 mt-0.5">
+					{{ doc.party_name || doc.party }}
+					<span v-if="doc.party_type" class="text-[11px] text-ink-500"
+						>· {{ doc.party_type }}</span
+					>
+				</div>
+				<div v-else class="text-sm text-ink-400 mt-0.5">—</div>
 			</div>
 			<div class="bg-white border border-ink-200 px-3 py-2" style="border-radius: 6px">
 				<div class="text-[10px] uppercase tracking-wider text-ink-500 font-medium">

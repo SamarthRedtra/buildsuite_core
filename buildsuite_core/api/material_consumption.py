@@ -14,8 +14,9 @@ project. Same rule the Desk client scripts follow.
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import cint, flt, getdate, nowdate
 
+from buildsuite_core.utils.procurement_party import apply_party_fields
 from buildsuite_core.utils.project import default_company
 from buildsuite_core.utils.stock_entry import get_warehouse_from_project
 
@@ -78,6 +79,9 @@ def list_material_consumption(start: int = 0, page_length: int = 10, search: str
 			"owner",
 			"docstatus",
 			"custom_cost_code_label as cost_code_label",
+			"custom_party_type as party_type",
+			"custom_party as party",
+			"custom_party_name as party_name",
 		],
 		order_by="posting_date desc, name desc",
 		start=cint(start),
@@ -100,11 +104,11 @@ def save_material_consumption(
 	items: str | None = None,
 	cost_code: str | None = None,
 	name: str | None = None,
+	posting_date: str | None = None,
+	party_type: str | None = None,
+	party: str | None = None,
 ) -> dict:
-	"""Create or update a draft Material Issue.
-
-	No posting date is accepted — Stock Entry defaults it to today.
-	"""
+	"""Create or update a draft Material Issue."""
 	rows = _parse_items(items)
 	if not project or not isinstance(project, str):
 		frappe.throw(_("Project is required."))
@@ -131,7 +135,10 @@ def save_material_consumption(
 	# the project's company, and a mismatch fails validation on a multi-company site.
 	doc.company = frappe.db.get_value("Project", project, "company") or default_company()
 	doc.from_warehouse = warehouse
+	doc.posting_date = getdate(posting_date) if posting_date else (doc.posting_date or nowdate())
+	doc.set_posting_time = 1
 	_apply_cost_code(doc, cost_code)
+	apply_party_fields(doc, party_type, party)
 
 	doc.set("items", [])
 	for row in rows:
@@ -203,6 +210,9 @@ def _serialize(doc) -> dict:
 		"owner": doc.owner,
 		"docstatus": doc.docstatus,
 		"amended_from": doc.amended_from,
+		"party_type": doc.get("custom_party_type") or "",
+		"party": doc.get("custom_party") or "",
+		"party_name": doc.get("custom_party_name") or "",
 		"cost_code_type": doc.get("custom_cost_code_type"),
 		"cost_code_group": doc.get("custom_cost_code_group"),
 		"cost_code_item": doc.get("custom_cost_code_item"),

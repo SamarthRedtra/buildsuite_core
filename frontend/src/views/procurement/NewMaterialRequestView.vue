@@ -14,6 +14,7 @@ import DeskActionBar from "@/components/desk/DeskActionBar.vue";
 import DeskSection from "@/components/desk/DeskSection.vue";
 import DeskField from "@/components/desk/DeskField.vue";
 import DeskInput from "@/components/desk/DeskInput.vue";
+import DeskSelect from "@/components/desk/DeskSelect.vue";
 import DeskLinkPicker from "@/components/desk/DeskLinkPicker.vue";
 import { usePermissions } from "@/composables/usePermissions";
 import { fmtINR } from "@/utils/format";
@@ -38,10 +39,29 @@ function inDays(n) {
 const form = ref({
 	project: route.query.project || "",
 	schedule_date: inDays(7),
+	party_type: "",
+	party: "",
 	lines: [emptyLine()],
 });
 const errors = ref({});
 const saving = ref(false);
+
+const partyLabelField = computed(() => {
+	if (form.value.party_type === "Supplier") return "supplier_name";
+	if (form.value.party_type === "Customer") return "customer_name";
+	if (form.value.party_type === "Employee") return "employee_name";
+	return "name";
+});
+const partyFilters = computed(() =>
+	form.value.party_type === "Employee" ? [["status", "=", "Active"]] : []
+);
+
+watch(
+	() => form.value.party_type,
+	(next, prev) => {
+		if (prev !== undefined && next !== prev) form.value.party = "";
+	}
+);
 
 watch(
 	editingId,
@@ -57,6 +77,8 @@ watch(
 			form.value = {
 				project: mr.project || "",
 				schedule_date: mr.schedule_date || inDays(7),
+				party_type: mr.party_type || "",
+				party: mr.party || "",
 				lines: (mr.items || []).map((it) => ({
 					item_code: it.item_code || "",
 					description: it.description || "",
@@ -104,6 +126,8 @@ async function onSave() {
 			name: editingId.value || undefined,
 			project: form.value.project,
 			schedule_date: form.value.schedule_date,
+			party_type: form.value.party_type || null,
+			party: form.value.party || null,
 			items: validLines.value.map((l) => ({
 				item_code: l.item_code,
 				description: l.description,
@@ -181,6 +205,28 @@ const saveLabel = computed(() =>
 				</DeskField>
 				<DeskField label="Needed by">
 					<DeskInput v-model="form.schedule_date" type="date" />
+				</DeskField>
+				<DeskField label="Party type" hint="Optional — who this request is for or against.">
+					<DeskSelect v-model="form.party_type">
+						<option value="">— None —</option>
+						<option value="Supplier">Supplier</option>
+						<option value="Customer">Customer</option>
+						<option value="Employee">Employee</option>
+					</DeskSelect>
+				</DeskField>
+				<DeskField label="Party">
+					<DeskLinkPicker
+						v-if="form.party_type"
+						:key="form.party_type"
+						v-model="form.party"
+						:doctype="form.party_type"
+						:label-field="partyLabelField"
+						value-field="name"
+						:search-fields="[partyLabelField, 'name']"
+						:filters="partyFilters"
+						placeholder="— Select party —"
+					/>
+					<div v-else class="text-sm text-ink-400 py-1">Pick a party type first</div>
 				</DeskField>
 			</DeskSection>
 

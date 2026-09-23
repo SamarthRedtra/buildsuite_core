@@ -78,6 +78,20 @@ function validateItemConversionWarehouses(frm) {
 	});
 }
 
+function syncPartyName(frm) {
+	if (!frm.doc.custom_party_type || !frm.doc.custom_party) {
+		frm.set_value("custom_party_name", "");
+		return;
+	}
+	frappe.call({
+		method: "buildsuite_core.utils.procurement_party.get_party_name",
+		args: { party_type: frm.doc.custom_party_type, party: frm.doc.custom_party },
+		callback(r) {
+			frm.set_value("custom_party_name", r.message || "");
+		},
+	});
+}
+
 frappe.ui.form.on("Stock Entry", {
 	refresh(frm) {
 		configureWarehouseQueries(frm);
@@ -91,6 +105,15 @@ frappe.ui.form.on("Stock Entry", {
 
 	validate(frm) {
 		validateItemConversionWarehouses(frm);
+	},
+
+	custom_party_type(frm) {
+		frm.set_value("custom_party", "");
+		frm.set_value("custom_party_name", "");
+	},
+
+	custom_party(frm) {
+		syncPartyName(frm);
 	},
 
 	project(frm) {

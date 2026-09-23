@@ -17,7 +17,9 @@ import DeskActionBar from "@/components/desk/DeskActionBar.vue";
 import DeskSection from "@/components/desk/DeskSection.vue";
 import DeskField from "@/components/desk/DeskField.vue";
 import DeskInput from "@/components/desk/DeskInput.vue";
+import DeskSelect from "@/components/desk/DeskSelect.vue";
 import DeskSearchableSelect from "@/components/desk/DeskSearchableSelect.vue";
+import DeskLinkPicker from "@/components/desk/DeskLinkPicker.vue";
 import CostCodePicker from "@/components/CostCodePicker.vue";
 import { usePermissions } from "@/composables/usePermissions";
 
@@ -30,12 +32,39 @@ const editing = computed(() => !!props.id);
 const canSaveForm = computed(() =>
 	editing.value ? canEdit("materialConsumption") : canCreate("materialConsumption")
 );
-const form = reactive({ project: "", cost_code: null, lines: [] });
+function today() {
+	return new Date().toISOString().slice(0, 10);
+}
+const form = reactive({
+	project: "",
+	posting_date: today(),
+	party_type: "",
+	party: "",
+	cost_code: null,
+	lines: [],
+});
 const saving = ref(false);
 const warehouse = ref("");
 const stock = ref([]);
 const loadingStock = ref(false);
 const addPick = ref(null);
+
+const partyLabelField = computed(() => {
+	if (form.party_type === "Supplier") return "supplier_name";
+	if (form.party_type === "Customer") return "customer_name";
+	if (form.party_type === "Employee") return "employee_name";
+	return "name";
+});
+const partyFilters = computed(() =>
+	form.party_type === "Employee" ? [["status", "=", "Active"]] : []
+);
+
+watch(
+	() => form.party_type,
+	(next, prev) => {
+		if (prev !== undefined && next !== prev) form.party = "";
+	}
+);
 
 // reqId: a slower reply for the old project must not land last.
 let stockReq = 0;
@@ -81,6 +110,9 @@ onMounted(async () => {
 			return;
 		}
 		form.project = doc.project || "";
+		form.posting_date = doc.posting_date || today();
+		form.party_type = doc.party_type || "";
+		form.party = doc.party || "";
 		form.cost_code = doc.cost_code_label
 			? {
 					type: (doc.cost_code_type || "").toLowerCase(),
@@ -146,6 +178,9 @@ async function onSave() {
 		const res = await saveMaterialConsumption({
 			name: props.id || undefined,
 			project: form.project,
+			posting_date: form.posting_date || today(),
+			party_type: form.party_type || null,
+			party: form.party || null,
 			cost_code: form.cost_code,
 			items: filledLines.value.map((l) => ({
 				item_code: l.item_code,
@@ -211,6 +246,34 @@ const breadcrumbs = computed(() => [
 						placeholder="— Select project —"
 						search-placeholder="Search projects…"
 					/>
+				</DeskField>
+
+				<DeskField label="Date" required hint="Posting date for the stock issue.">
+					<DeskInput v-model="form.posting_date" type="date" />
+				</DeskField>
+
+				<DeskField label="Party type" hint="Optional — who this issue is for or against.">
+					<DeskSelect v-model="form.party_type">
+						<option value="">— None —</option>
+						<option value="Supplier">Supplier</option>
+						<option value="Customer">Customer</option>
+						<option value="Employee">Employee</option>
+					</DeskSelect>
+				</DeskField>
+
+				<DeskField label="Party">
+					<DeskLinkPicker
+						v-if="form.party_type"
+						:key="form.party_type"
+						v-model="form.party"
+						:doctype="form.party_type"
+						:label-field="partyLabelField"
+						value-field="name"
+						:search-fields="[partyLabelField, 'name']"
+						:filters="partyFilters"
+						placeholder="— Select party —"
+					/>
+					<div v-else class="text-sm text-ink-400 py-1">Pick a party type first</div>
 				</DeskField>
 
 				<DeskField
