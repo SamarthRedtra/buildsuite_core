@@ -214,10 +214,14 @@ function boqSubItemsByItem(itemId) {
 }
 const boqItemsByBoq = computed(() => allItems.value);
 
-// Shared 15-column grid for the tree header + group / item / sub-item rows so every
+// Shared 16-column grid for the tree header + group / item / sub-item rows so every
 // level lines up. Without it the rows have no column template and collapse.
 const treeGridStyle =
-	"grid-template-columns: 28px 80px minmax(240px, 1fr) 80px 90px 90px 90px 100px 110px 120px 110px 110px 120px 80px 110px; min-width: 1540px;";
+	"grid-template-columns: 28px 80px minmax(240px, 1fr) 80px 90px 100px 90px 90px 100px 110px 120px 110px 110px 120px 80px 110px; min-width: 1640px;";
+
+function subItemTotalQty(subItem, item) {
+	return (Number(subItem.qtyPerUnit) || 0) * (Number(item.plannedQty) || 0);
+}
 
 const totals = computed(() => {
 	const planned = allItems.value.reduce((a, i) => a + (i.plannedAmount || 0), 0);
@@ -1417,6 +1421,7 @@ const breadcrumbs = computed(() => {
 					<div class="px-3 py-2">Description</div>
 					<div class="px-3 py-2">Unit</div>
 					<div class="px-3 py-2 text-right">Plan Qty</div>
+					<div class="px-3 py-2 text-right">Total Qty</div>
 					<div class="px-3 py-2 text-right">Act Qty</div>
 					<div class="px-3 py-2 text-right">Remain</div>
 					<div class="px-3 py-2 text-right">Rate (₹)</div>
@@ -1448,6 +1453,7 @@ const breadcrumbs = computed(() => {
 						<div class="px-3 py-2 text-sm font-semibold text-ink-900">
 							{{ g.name }}
 						</div>
+						<div></div>
 						<div></div>
 						<div></div>
 						<div></div>
@@ -1661,6 +1667,7 @@ const breadcrumbs = computed(() => {
 								>
 									{{ item.plannedQty.toLocaleString("en-IN") }}
 								</div>
+								<div></div>
 								<div
 									class="px-3 py-1.5 text-right tabular-nums text-sm text-ink-700"
 								>
@@ -1806,6 +1813,11 @@ const breadcrumbs = computed(() => {
 										class="px-3 py-1 text-right tabular-nums text-xs text-ink-500"
 									>
 										{{ si.qtyPerUnit }}
+									</div>
+									<div
+										class="px-3 py-1 text-right tabular-nums text-xs text-ink-700"
+									>
+										{{ subItemTotalQty(si, item).toLocaleString("en-IN") }}
 									</div>
 									<div></div>
 									<div></div>
