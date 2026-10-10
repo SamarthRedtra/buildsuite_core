@@ -7,7 +7,15 @@ from pathlib import Path
 import frappe
 from frappe.utils import flt, getdate
 
-from buildsuite_core.waterproofing_import import COMPANY, CUSTOMER, PROJECT_ID, PROJECT_NAME, parse_workbook
+from buildsuite_core.waterproofing_import import (
+	COMPANY,
+	CUSTOMER,
+	EXPECTED,
+	PROJECT_ID,
+	PROJECT_NAME,
+	R1_PROFILE,
+	parse_workbook,
+)
 from buildsuite_core.waterproofing_import_audit import attach_source, remove_physical_file, write_audit
 from buildsuite_core.waterproofing_import_documents import (
 	ASSEMBLY,
@@ -40,8 +48,8 @@ def _work_package(project):
 	)
 
 
-def _boq(project):
-	return frappe.db.get_value("BOQ", {"project": project, "title": BOQ_TITLE}, "name") if project else None
+def _boq(project, profile):
+	return frappe.db.get_value("BOQ", {"project": project, "title": profile.boq_title}, "name") if project else None
 
 
 def _sales_order(boq):
@@ -50,6 +58,9 @@ def _sales_order(boq):
 
 def _check_project(project, data, errors):
 	if not project:
+		if not data.profile.creates_project_context:
+			errors.append("R2 requires the existing BS-WP-001 project")
+			return
 		collision = frappe.db.get_value("Project", {"project_name": PROJECT_NAME}, "name")
 		if collision:
 			errors.append(f"Project name is already used by {collision}")
@@ -69,13 +80,15 @@ def _check_project(project, data, errors):
 			errors.append(f"Existing Project {project} has conflicting {field}")
 	if getdate(doc.expected_start_date) != data.start_date or doc.expected_end_date:
 		errors.append(f"Existing Project {project} has conflicting dates")
-	if not close_enough(doc.estimated_costing, data.values["cost"]):
+	if not close_enough(doc.estimated_costing, EXPECTED["cost"]):
 		errors.append(f"Existing Project {project} has conflicting estimated cost")
 
 
 def _check_rates(data, errors):
 	for row in data.rates:
 		if not frappe.db.exists("Construction Rate Master", row.code):
+			if not data.profile.creates_project_context:
+				errors.append(f"R2 requires existing Construction Rate Master: {row.code}")
 			continue
 		doc = frappe.get_doc("Construction Rate Master", row.code)
 		if (
@@ -85,17 +98,18 @@ def _check_rates(data, errors):
 			or doc.supply_method != "Non-stock"
 			or doc.item_code
 			or not close_enough(doc.current_rate, row.rate, 0.0001)
-			or data.checksum not in (doc.notes or "")
+			or (data.profile.creates_project_context and data.checksum not in (doc.notes or ""))
 		):
 			errors.append(f"Existing Construction Rate Master conflicts with workbook: {row.code}")
 
 
 def _check_assembly(data, errors):
-	if not frappe.db.exists("Assembly", ASSEMBLY):
+	assembly = data.profile.assembly
+	if not frappe.db.exists("Assembly", assembly):
 		return
-	doc = frappe.get_doc("Assembly", ASSEMBLY)
+	doc = frappe.get_doc("Assembly", assembly)
 	actual = [(row.resource, flt(row.coefficient)) for row in doc.components]
-	expected = [(resource, float(coefficient)) for resource, coefficient in SELECTED]
+	expected = [(row.resource, float(row.coefficient)) for row in data.profile.selected]
 	if (
 		doc.uom != "Square Meter"
 		or len(actual) != 7
@@ -105,10 +119,12 @@ def _check_assembly(data, errors):
 		)
 		or data.checksum not in (doc.notes or "")
 	):
-		errors.append(f"Existing Assembly conflicts with workbook: {ASSEMBLY}")
+		errors.append(f"Existing Assembly conflicts with workbook: {assembly}")
 
 
 def _check_template(data, errors):
+	if not data.profile.creates_project_context:
+		return
 	if not frappe.db.exists("Estimate Template", TEMPLATE):
 		return
 	doc = frappe.get_doc("Estimate Template", TEMPLATE)
@@ -121,12 +137,46 @@ def _check_template(data, errors):
 		errors.append(f"Existing Estimate Template conflicts with workbook: {TEMPLATE}")
 
 
-def _check_item(errors):
+def _check_item(data, errors):
+	if not data.profile.creates_project_context:
+		return
 	if not frappe.db.exists("Item", ITEM):
 		return
 	doc = frappe.get_doc("Item", ITEM)
 	if doc.is_stock_item or not doc.is_sales_item or doc.stock_uom != "Square Meter":
 		errors.append(f"Existing Item conflicts with workbook import: {ITEM}")
+
+
+def _check_r2_boq(boq, work_package, data, errors):
+	direct = frappe.db.get_value(
+		"BOQ Item",
+		{"boq": boq, "code": "A1"},
+		["planned_qty", "rate", "assembly", "work_package"],
+		as_dict=True,
+	)
+	if not direct or (
+		not close_enough(direct.planned_qty, data.values["area"], 0.0001)
+		or not close_enough(direct.rate, data.values["direct"] / data.values["area"], 0.000001)
+		or direct.assembly != data.profile.assembly
+		or direct.work_package != work_package
+	):
+		errors.append(f"Existing R2 direct waterproofing line conflicts with workbook: {boq}")
+		return
+	expected_qty = {
+		component.resource: component.coefficient * data.values["area"]
+		for component in data.profile.selected
+	}
+	actual_qty = {
+		row.rate_master: row.qty
+		for row in frappe.get_all(
+			"BOQ Sub Item", filters={"boq": boq}, fields=["rate_master", "qty"]
+		)
+	}
+	if set(actual_qty) != set(expected_qty) or any(
+		not close_enough(actual_qty[resource], quantity, 0.0001)
+		for resource, quantity in expected_qty.items()
+	):
+		errors.append(f"Existing R2 exploded quantities conflict with workbook: {boq}")
 
 
 def _check_business_docs(project, work_package, boq, sales_order, data, errors):
@@ -135,9 +185,11 @@ def _check_business_docs(project, work_package, boq, sales_order, data, errors):
 		if (
 			doc.work_package_name != "Waterproofing Works"
 			or doc.end_date
-			or not close_enough(doc.budget, data.values["cost"])
+			or not close_enough(doc.budget, EXPECTED["cost"])
 		):
 			errors.append(f"Existing Work Package conflicts with workbook: {work_package}")
+	elif not data.profile.creates_project_context:
+		errors.append("R2 requires the existing Waterproofing Works work package")
 	if boq:
 		doc = frappe.get_doc("BOQ", boq)
 		if (
@@ -147,9 +199,15 @@ def _check_business_docs(project, work_package, boq, sales_order, data, errors):
 			or flt(doc.tax_rate) != 0
 			or frappe.db.count("BOQ Item", {"boq": boq}) != 4
 			or frappe.db.count("BOQ Sub Item", {"boq": boq}) != 7
+			or (
+				not data.profile.creates_project_context
+				and (doc.base_revision != "BOQ-00001" or doc.revision != 2)
+			)
 		):
 			errors.append(f"Existing BOQ conflicts with workbook: {boq}")
-	if sales_order:
+		elif not data.profile.creates_project_context:
+			_check_r2_boq(boq, work_package, data, errors)
+	if sales_order and data.profile.creates_project_context:
 		doc = frappe.get_doc("Sales Order", sales_order)
 		if (
 			doc.docstatus != 0
@@ -160,6 +218,12 @@ def _check_business_docs(project, work_package, boq, sales_order, data, errors):
 			or not close_enough(doc.grand_total, data.values["selling"])
 		):
 			errors.append(f"Existing Sales Order conflicts with workbook: {sales_order}")
+	if not data.profile.creates_project_context:
+		r1_boq = _boq(project, R1_PROFILE)
+		if r1_boq != "BOQ-00001":
+			errors.append("R2 requires BOQ-00001 as the existing R1 source revision")
+		elif frappe.db.get_value("BOQ", r1_boq, "revision") != 1:
+			errors.append("BOQ-00001 must remain revision 1")
 
 
 def get_import_plan(workbook_path):
@@ -180,13 +244,13 @@ def get_import_plan(workbook_path):
 			errors.append(f"Required {doctype} is missing: {name}")
 	project = _project_name()
 	work_package = _work_package(project)
-	boq = _boq(project)
+	boq = _boq(project, data.profile)
 	sales_order = _sales_order(boq)
 	_check_project(project, data, errors)
 	_check_rates(data, errors)
 	_check_assembly(data, errors)
 	_check_template(data, errors)
-	_check_item(errors)
+	_check_item(data, errors)
 	_check_business_docs(project, work_package, boq, sales_order, data, errors)
 	states = {
 		"project": project,
@@ -194,14 +258,16 @@ def get_import_plan(workbook_path):
 		"rate_masters": [
 			row.code for row in data.rates if frappe.db.exists("Construction Rate Master", row.code)
 		],
-		"assembly": ASSEMBLY if frappe.db.exists("Assembly", ASSEMBLY) else None,
-		"estimate_template": TEMPLATE if frappe.db.exists("Estimate Template", TEMPLATE) else None,
-		"item": ITEM if frappe.db.exists("Item", ITEM) else None,
+		"assembly": data.profile.assembly if frappe.db.exists("Assembly", data.profile.assembly) else None,
+		"estimate_template": TEMPLATE if data.profile.creates_project_context and frappe.db.exists("Estimate Template", TEMPLATE) else None,
+		"item": ITEM if data.profile.creates_project_context and frappe.db.exists("Item", ITEM) else None,
 		"boq": boq,
-		"sales_order": sales_order,
+		"sales_order": sales_order if data.profile.creates_project_context else None,
+		"source_boq": _boq(project, R1_PROFILE) if not data.profile.creates_project_context else None,
 	}
 	return {
 		"operation": "Waterproofing workbook planning and draft import",
+		"profile": data.profile.key,
 		"site": frappe.local.site,
 		"workbook": str(Path(workbook_path).expanduser().resolve()),
 		"workbook_sha256": data.checksum,
@@ -250,38 +316,39 @@ def apply_import(workbook_path, allow_production=False):
 		else:
 			unchanged.append(project)
 		work_package = _work_package(project)
-		if not work_package:
+		if not work_package and data.profile.creates_project_context:
 			work_package = create_work_package(project, data).name
 			created["work_package"].append(work_package)
 		missing_rates = [
 			row for row in data.rates if not frappe.db.exists("Construction Rate Master", row.code)
 		]
-		if missing_rates:
+		if missing_rates and data.profile.creates_project_context:
 			created["rate_masters"].extend(create_rates(data, missing_rates))
 		unchanged.extend(row.code for row in data.rates if row.code not in created["rate_masters"])
-		if not frappe.db.exists("Assembly", ASSEMBLY):
+		if not frappe.db.exists("Assembly", data.profile.assembly):
 			created["assembly"].append(create_assembly(data).name)
 		else:
-			unchanged.append(ASSEMBLY)
-		if not frappe.db.exists("Estimate Template", TEMPLATE):
+			unchanged.append(data.profile.assembly)
+		if data.profile.creates_project_context and not frappe.db.exists("Estimate Template", TEMPLATE):
 			created["estimate_template"].append(create_template(data).name)
-		else:
+		elif data.profile.creates_project_context:
 			unchanged.append(TEMPLATE)
-		if not frappe.db.exists("Item", ITEM):
+		if data.profile.creates_project_context and not frappe.db.exists("Item", ITEM):
 			created["item"].append(create_service_item().name)
-		else:
+		elif data.profile.creates_project_context:
 			unchanged.append(ITEM)
-		boq = _boq(project)
+		boq = _boq(project, data.profile)
 		if not boq:
-			boq = create_boq(project, work_package, data).name
+			base_boq = _boq(project, R1_PROFILE) if not data.profile.creates_project_context else None
+			boq = create_boq(project, work_package, data, base_boq=base_boq).name
 			created["boq"].append(boq)
 		else:
 			unchanged.append(boq)
-		sales_order = _sales_order(boq)
-		if not sales_order:
+		sales_order = _sales_order(boq) if data.profile.creates_project_context else None
+		if data.profile.creates_project_context and not sales_order:
 			sales_order = create_sales_order(project, boq, data).name
 			created["sales_order"].append(sales_order)
-		else:
+		elif data.profile.creates_project_context:
 			unchanged.append(sales_order)
 		attachment, was_created, physical_created = attach_source(workbook_path, project, data.checksum)
 		if was_created:
@@ -304,7 +371,8 @@ def apply_import(workbook_path, allow_production=False):
 			"import_complete": True,
 		}
 		result["audit"] = write_audit(result, project)
-		physical_files.append(result["audit"]["file_url"])
+		if result["audit"]["created"]:
+			physical_files.append(result["audit"]["file_url"])
 		return result
 	except Exception:
 		for file_url in physical_files:

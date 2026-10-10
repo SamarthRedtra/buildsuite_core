@@ -2,11 +2,17 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from frappe.tests import UnitTestCase
 from openpyxl import Workbook
 
-from buildsuite_core.waterproofing_import import EXPECTED, parse_workbook
+from buildsuite_core.waterproofing_import import (
+	EXPECTED,
+	R2_EXPECTED,
+	R2_PROFILE,
+	parse_workbook,
+)
 from buildsuite_core.waterproofing_import_documents import SELECTED
 
 
@@ -35,8 +41,52 @@ class TestWaterproofingImport(UnitTestCase):
 		self.assertEqual(coefficient, Decimal("3") / Decimal("1.1"))
 		self.assertNotEqual(coefficient, Decimal("3") * Decimal("1.1"))
 
+	def test_two_mm_profile_accepts_the_approved_fingerprint_and_live_coefficients(self):
+		with TemporaryDirectory() as directory:
+			path = Path(directory) / "waterproofing-2mm.xlsx"
+			_create_workbook(path, R2_EXPECTED)
+			with patch(
+				"buildsuite_core.waterproofing_import.hashlib.sha256",
+				return_value=_Digest("a76b" + "0" * 56 + "e643"),
+			):
+				data = parse_workbook(path)
 
-def _create_workbook(path):
+		self.assertIs(data.profile, R2_PROFILE)
+		self.assertEqual(data.values, R2_EXPECTED)
+		self.assertEqual(
+			dict((row.resource, row.coefficient) for row in data.profile.selected),
+			{
+				"WB-PRI-SF-PRIMER": Decimal("0.25"),
+				"WB-FIL-AEROSEAL": Decimal("0.2"),
+				"WB-POL-HP-400": Decimal("1.8181818"),
+				"WB-LAB-SUPERVISOR": Decimal("0.2"),
+				"WB-LAB-SPRAYER": Decimal("0.2"),
+				"WB-LAB-WALL-PAINTER": Decimal("0.2"),
+				"WB-LAB-HELPER": Decimal("0.4"),
+			},
+		)
+		self.assertEqual(data.values["selling"], Decimal("86496"))
+		self.assertEqual(
+			dict((row.resource, row.coefficient) for row in data.profile.selected)["WB-PRI-SF-PRIMER"]
+			* data.values["area"],
+			Decimal("125"),
+		)
+		self.assertAlmostEqual(
+			float(dict((row.resource, row.coefficient) for row in data.profile.selected)["WB-POL-HP-400"] * data.values["area"]),
+			909.09,
+			places=2,
+		)
+
+
+class _Digest:
+	def __init__(self, value):
+		self.value = value
+
+	def hexdigest(self):
+		return self.value
+
+
+def _create_workbook(path, expected=EXPECTED):
 	workbook = Workbook()
 	project = workbook.active
 	project.title = "Project Costing"
@@ -58,7 +108,7 @@ def _create_workbook(path):
 		("G52", "selling"),
 		("G54", "profit"),
 	):
-		project[cell] = float(EXPECTED[key])
+		project[cell] = float(expected[key])
 	rates = workbook.create_sheet("Material & Rates")
 	for row, name, rate in (
 		(7, "Supervisor", 35),

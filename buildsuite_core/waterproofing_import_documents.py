@@ -1,27 +1,23 @@
 """Document builders for the exact workbook-cost waterproofing import."""
 
-from decimal import Decimal
-
 import frappe
 from frappe.utils import flt
 
 from buildsuite_core.api import boq as boq_api
-from buildsuite_core.waterproofing_import import COMPANY, CUSTOMER, PROJECT_ID, PROJECT_NAME
+from buildsuite_core.waterproofing_import import (
+	COMPANY,
+	CUSTOMER,
+	PROJECT_ID,
+	PROJECT_NAME,
+	R1_PROFILE,
+)
 
-ASSEMBLY = "ASM-WB-WATERPROOFING-3MM"
+ASSEMBLY = R1_PROFILE.assembly
 TEMPLATE = "TPL-WB-WATERPROOFING-3MM"
 ITEM = "BS-WB-WATERPROOFING-3MM"
 BOQ_TITLE = "Waterproofing Consumption Sheet — Workbook Estimate"
 WP_CODE = "WP-WATERPROOFING"
-SELECTED = (
-	("WB-PRI-SF-PRIMER", Decimal("0.25")),
-	("WB-FIL-FUMED-SILICA", Decimal("0.2")),
-	("WB-POL-AQUALINE-AL", Decimal("3") / Decimal("1.1")),
-	("WB-LAB-SUPERVISOR", Decimal("0.1")),
-	("WB-LAB-SPRAYER", Decimal("0.1")),
-	("WB-LAB-WALL-PAINTER", Decimal("0.1")),
-	("WB-LAB-HELPER", Decimal("0.2")),
-)
+SELECTED = tuple((component.resource, component.coefficient) for component in R1_PROFILE.selected)
 
 
 def create_project(data):
@@ -87,22 +83,23 @@ def create_rates(data, rows=None):
 
 
 def create_assembly(data):
+	profile = data.profile
 	doc = frappe.get_doc(
 		{
 			"doctype": "Assembly",
-			"assembly_code": ASSEMBLY,
-			"assembly_name": "Workbook Aqualine AL Waterproofing — 3 mm",
+			"assembly_code": profile.assembly,
+			"assembly_name": profile.assembly_name,
 			"category": "General" if frappe.db.exists("Assembly Category", "General") else None,
 			"uom": "Square Meter",
-			"notes": f"Exact reciprocal Aqualine calculation from workbook {data.checksum}.",
+			"notes": f"Workbook profile {profile.key}. SHA-256: {data.checksum}.",
 		}
 	)
-	for resource, coefficient in SELECTED:
+	for component in profile.selected:
 		doc.append(
 			"components",
 			{
-				"resource": resource,
-				"coefficient": float(coefficient),
+				"resource": component.resource,
+				"coefficient": float(component.coefficient),
 				"remarks": "Workbook-selected direct cost",
 			},
 		)
@@ -151,16 +148,14 @@ def create_service_item():
 	).insert(ignore_permissions=True)
 
 
-def create_boq(project, work_package, data):
+def create_boq(project, work_package, data, base_boq=None):
+	profile = data.profile
 	margin = (data.values["selling"] - data.values["cost"]) / data.values["cost"] * 100
+	values = {"project": project, "title": profile.boq_title, "margin_rate": float(margin), "tax_rate": 0}
+	if base_boq:
+		values.update({"base_revision": base_boq, "revision": 2})
 	boq = frappe.get_doc(
-		{
-			"doctype": "BOQ",
-			"project": project,
-			"title": BOQ_TITLE,
-			"margin_rate": float(margin),
-			"tax_rate": 0,
-		}
+		{"doctype": "BOQ", **values}
 	).insert(ignore_permissions=True)
 	direct = frappe.get_doc(
 		{
@@ -177,11 +172,15 @@ def create_boq(project, work_package, data):
 			"boq": boq.name,
 			"boq_group": direct.name,
 			"code": "A1",
-			"description": "Aqualine AL waterproofing system at 3 mm",
+			"description": (
+				"Aqualine AL waterproofing system at 3 mm"
+				if profile is R1_PROFILE
+				else "HP 400 waterproofing system at 2 mm"
+			),
 			"unit": "Square Meter",
 			"planned_qty": float(data.values["area"]),
 			"quantity_source": "Assembly",
-			"assembly": ASSEMBLY,
+			"assembly": profile.assembly,
 			"work_package": work_package,
 			"cost_head": "Material",
 		}

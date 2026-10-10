@@ -37,6 +37,25 @@ def attach_source(workbook_path, project, checksum):
 
 
 def write_audit(payload, project):
+	for file in frappe.get_all(
+		"File",
+		filters={"attached_to_doctype": "Project", "attached_to_name": project, "is_private": 1},
+		fields=["name", "file_url"],
+	):
+		if not file.file_url or not Path(file.file_url).name.startswith("waterproofing-import-audit-"):
+			continue
+		path = Path(frappe.get_site_path(file.file_url.lstrip("/")))
+		try:
+			existing = json.loads(path.read_text())
+		except (OSError, json.JSONDecodeError):
+			continue
+		if existing.get("workbook_sha256") == payload.get("workbook_sha256"):
+			return {
+				"file": file.name,
+				"file_url": file.file_url,
+				"sha256": _sha256(path),
+				"created": False,
+			}
 	copy = dict(payload)
 	canonical = json.dumps(copy, sort_keys=True, separators=(",", ":"), default=str).encode()
 	copy["payload_sha256"] = hashlib.sha256(canonical).hexdigest()
@@ -50,7 +69,12 @@ def write_audit(payload, project):
 		project,
 		is_private=1,
 	)
-	return {"file": doc.name, "file_url": doc.file_url, "sha256": hashlib.sha256(content).hexdigest()}
+	return {
+		"file": doc.name,
+		"file_url": doc.file_url,
+		"sha256": hashlib.sha256(content).hexdigest(),
+		"created": True,
+	}
 
 
 def remove_physical_file(file_url):
